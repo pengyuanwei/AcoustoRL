@@ -11,7 +11,8 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/yourusername/AcoustoRL",
     packages=find_packages(),
-    install_requires=None,    
+    install_requires=["gymnasium==0.29.1",
+                      "tqdm==4.66.4",],    
     classifiers=[
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",

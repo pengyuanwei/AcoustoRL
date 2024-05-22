@@ -89,9 +89,9 @@ class TD3():
 		min_action,
 		max_action,
 		exploration_noise=0.1,
-		policy_noise=0.2,		
-		tau=0.005,
 		discount=0.99,
+		tau=0.005,
+		policy_noise=0.2,		
 		noise_clip=0.5,
 		policy_freq=2,
 		replay_size=1e6,
@@ -115,8 +115,8 @@ class TD3():
 		self.discount = discount
 		self.tau = tau
 		self.exploration_noise = exploration_noise
-		self.policy_noise = policy_noise
-		self.noise_clip = noise_clip
+		self.policy_noise = policy_noise * (self.max_action - self.min_action)/2.0
+		self.noise_clip = noise_clip * (self.max_action - self.min_action)/2.0
 		self.policy_freq = policy_freq
 
 		self.total_it = 0

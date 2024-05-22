@@ -7,13 +7,13 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import os, sys
 
-from acoustorl.TD3wPER import TD3
+from acoustorl.TD3 import TD3
 from acoustorl.common import general_utils
 
 
 if __name__ == "__main__":
-    env_name = 'Hopper-v4'  #'HalfCheetah-v2'
-    algorithm = 'TD3wPER'
+    env_name = 'Hopper-v3'  #'HalfCheetah-v2'
+    algorithm = 'TD3'
 
     # Define hyperparameters
     total_timesteps = 1000000
@@ -37,12 +37,11 @@ if __name__ == "__main__":
     if not os.path.exists(target_folder):
         os.makedirs(target_folder)
 
-    for i in range(10):
+    for i in range(5):
         env = gym.make(env_name)
 
-        random.seed(i)
-        np.random.seed(i)
-        torch.manual_seed(i)
+        # Set seeds
+        general_utils.set_seed(seed=i, env=env)
 
         state_dim = env.observation_space.shape[0]
         action_dim = env.action_space.shape[0]

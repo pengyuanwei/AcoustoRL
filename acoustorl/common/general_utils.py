@@ -8,7 +8,7 @@ import copy
 
 
 # TD3wPER
-def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, max_timesteps, i):
+def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, max_timesteps, target_folder, i):
     num_evaluate = 10
     num_timesteps = 0
     best_episode_return = 0
@@ -28,7 +28,7 @@ def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, tota
             std_list.append(return_std)       
             if average_episode_return > best_episode_return:
                 best_episode_return = average_episode_return
-                agent.save_experiment(env_name, i)
+                agent.save_experiment(target_folder, i)
         
         state, info = env.reset()
         terminated, truncated = False, False
@@ -38,7 +38,7 @@ def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, tota
             else:
                 action = agent.take_action(state)
             next_state, reward, terminated, truncated, info = env.step(action)
-            agent.replay_buffer.store(state, action, reward, next_state, terminated)
+            agent.replay_buffer.store((state, action, reward, next_state, terminated))
             state = next_state
             if agent.replay_buffer.memory_num > minimal_size:
                 agent.train(batch_size)

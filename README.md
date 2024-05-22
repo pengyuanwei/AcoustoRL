@@ -8,7 +8,7 @@ Hi there, this is a RL implementation Python library.
 
 1. Clone the project form github.
 2. Open a terminal
-3. Active a virtual environment
+3. Active a Python virtual environment
 4. Open the file:
 ~~~python
 cd PATH\AcoustoRL

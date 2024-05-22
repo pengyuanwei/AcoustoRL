@@ -98,7 +98,8 @@ class ReplayBuffer(object):  # stored as ( s, a, r, s_ ) in SumTree
         self.memory_num = 0
         self.memory_size = size
 
-    def store(self, transition):
+    def store(self, state, action, reward, next_state, terminated):
+        transition = (state, action, reward, next_state, terminated)
         max_p = np.max(self.tree.tree[-self.tree.capacity:])
         if max_p == 0:
             max_p = self.abs_err_upper

@@ -7,9 +7,24 @@ import gymnasium as gym
 import copy
 
 
+def set_seed(seed, env=None):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        #torch.cuda.manual_seed_all(seed)  # If you are using multi-GPU
+    if env is not None:
+        env.reset(seed=seed)
+        if hasattr(env.action_space, 'seed'):
+            env.action_space.seed(seed)
+        if hasattr(env.observation_space, 'seed'):
+            env.observation_space.seed(seed)
+
+
 # TD3wPER
 def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, max_timesteps, target_folder, i):
-    num_evaluate = 10
+    num_evaluate = 5
     num_timesteps = 0
     best_episode_return = 0
     return_list = []
@@ -21,9 +36,6 @@ def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, tota
         if num == 0 or num >= 10000:
             num = 0
             average_episode_return, return_std = eval_policy(agent, env_name, num_evaluate, max_timesteps)
-            random.seed(i)
-            np.random.seed(i)
-            torch.manual_seed(i)
             return_list.append(average_episode_return) 
             std_list.append(return_std)       
             if average_episode_return > best_episode_return:
@@ -38,7 +50,7 @@ def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, tota
             else:
                 action = agent.take_action(state)
             next_state, reward, terminated, truncated, info = env.step(action)
-            agent.replay_buffer.store((state, action, reward, next_state, terminated))
+            agent.replay_buffer.store(state, action, reward, next_state, terminated)
             state = next_state
             if agent.replay_buffer.memory_num > minimal_size:
                 agent.train(batch_size)
@@ -61,9 +73,7 @@ def eval_policy(agent, env_name, eval_episodes=10, max_timesteps=1000):
 
     avg_reward = np.zeros([eval_episodes])
     for i in range(eval_episodes):
-        random.seed(10*(i+1))
-        np.random.seed(10*(i+1))
-        torch.manual_seed(10*(i+1))
+        set_seed(seed=10*(i+1), env=eval_env)
 
         num_timsteps = 0
         state, info = eval_env.reset()
@@ -85,6 +95,49 @@ def eval_policy(agent, env_name, eval_episodes=10, max_timesteps=1000):
     return average_reward, reward_std
 
 
+# TD3
+class ReplayBuffer(object):
+    def __init__(self, 
+                 state_dim, 
+                 action_dim, 
+                 max_size=int(1e6),
+                 device=None,
+                 ):
+        self.max_size = max_size
+        self.ptr = 0
+        self.memory_num = 0
+
+        self.state = np.zeros((max_size, state_dim))
+        self.action = np.zeros((max_size, action_dim))
+        self.next_state = np.zeros((max_size, state_dim))
+        self.reward = np.zeros((max_size, 1))
+        self.done = np.zeros((max_size, 1))
+
+        self.device = device
+
+    def store(self, state, action, reward, next_state, terminated):
+        self.state[self.ptr] = state
+        self.action[self.ptr] = action
+        self.reward[self.ptr] = reward
+        self.next_state[self.ptr] = next_state
+        self.done[self.ptr] = terminated
+
+        self.ptr = (self.ptr + 1) % self.max_size
+        self.memory_num = min(self.memory_num + 1, self.max_size)    
+
+    def sample_batch(self, batch_size):
+        ind = np.random.randint(0, self.memory_num, size=batch_size)
+
+        return (
+            torch.FloatTensor(self.state[ind]).to(self.device),
+            torch.FloatTensor(self.action[ind]).to(self.device),
+            torch.FloatTensor(self.reward[ind]).to(self.device),
+            torch.FloatTensor(self.next_state[ind]).to(self.device),
+            torch.FloatTensor(self.done[ind]).to(self.device)
+        )
+    
+
+###########################################################################################################
 # DDPG & MADDPG
 class ReplayBufferDDPG:
     def __init__(self, capacity):
@@ -100,43 +153,6 @@ class ReplayBufferDDPG:
 
     def size(self): 
         return len(self.buffer)
-
-
-# TD3
-class ReplayBuffer(object):
-    def __init__(self, state_dim, action_dim, max_size=int(1e6)):
-        self.max_size = max_size
-        self.ptr = 0
-        self.size = 0
-
-        self.state = np.zeros((max_size, state_dim))
-        self.action = np.zeros((max_size, action_dim))
-        self.next_state = np.zeros((max_size, state_dim))
-        self.reward = np.zeros((max_size, 1))
-        self.not_done = np.zeros((max_size, 1))
-
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    def add(self, state, action, next_state, reward, done):
-        self.state[self.ptr] = state
-        self.action[self.ptr] = action
-        self.next_state[self.ptr] = next_state
-        self.reward[self.ptr] = reward
-        self.not_done[self.ptr] = 1. - done
-
-        self.ptr = (self.ptr + 1) % self.max_size
-        self.size = min(self.size + 1, self.max_size)    
-
-    def sample(self, batch_size):
-        ind = np.random.randint(0, self.size, size=batch_size)
-
-        return (
-            torch.FloatTensor(self.state[ind]).to(self.device),
-            torch.FloatTensor(self.action[ind]).to(self.device),
-            torch.FloatTensor(self.next_state[ind]).to(self.device),
-            torch.FloatTensor(self.reward[ind]).to(self.device),
-            torch.FloatTensor(self.not_done[ind]).to(self.device)
-        )
 
 
 # DQD3  

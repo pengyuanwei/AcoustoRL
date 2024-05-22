@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import os
 
 from acoustorl.common.per import ReplayBuffer
 
@@ -256,9 +257,17 @@ class TD3():
 		self.actor_target = copy.deepcopy(self.actor)
 
 
-	def save_experiment(self, env_name, i):
-		torch.save(self.critic.state_dict(), "TD3_%s_data/critic%d.pth"%(env_name, i))
-		torch.save(self.critic_optimizer.state_dict(), "TD3_%s_data/critic_optimizer%d.pth"%(env_name, i))
+	def save_experiment(self, target_folder, i):
+		# 使用循环来处理文件名和保存过程以减少代码重复，提高代码的可维护性和可读性。
+		# Define the base names and corresponding objects to save
+		file_names = [
+			(f"critic{i}.pth", self.critic.state_dict()),
+			(f"critic_optimizer{i}.pth", self.critic_optimizer.state_dict()),
+			(f"actor{i}.pth", self.actor.state_dict()),
+			(f"actor_optimizer{i}.pth", self.actor_optimizer.state_dict())
+		]
 		
-		torch.save(self.actor.state_dict(), "TD3_%s_data/actor%d.pth"%(env_name, i))
-		torch.save(self.actor_optimizer.state_dict(), "TD3_%s_data/actor_optimizer%d.pth"%(env_name, i))
+		# Save each file
+		for file_name, state_dict in file_names:
+			target_file = os.path.join(target_folder, file_name)
+			torch.save(state_dict, target_file)

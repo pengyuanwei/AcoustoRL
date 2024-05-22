@@ -35,7 +35,7 @@ pip install -e .
 
 ## Requirements
 
-
+Gymnasium
 
 
 

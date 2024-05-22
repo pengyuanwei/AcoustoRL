@@ -12,7 +12,7 @@ from acoustorl.common import general_utils
 
 
 if __name__ == "__main__":
-    env_name = 'Hopper-v3'  #'HalfCheetah-v2'
+    env_name = 'Hopper-v4'  #'HalfCheetah-v2'
     algorithm = 'TD3wPER'
 
     # Define hyperparameters
@@ -64,7 +64,7 @@ if __name__ == "__main__":
             device
         )
 
-        return_list, std_list = general_utils.train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, max_timesteps, i)
+        return_list, std_list = general_utils.train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, max_timesteps, target_folder, i)
 
         # Define the the path of target file
         file_name1 = f"return_list{i}.npy"

@@ -37,8 +37,9 @@ def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, tota
             # Evaluate every 1% total timesteps, each evaluation reports the average reward over num_evaluate with no exploration noise.
             # The results are reported over 10 random seeds of the Gym simulator and the network initialization.
             if num_timesteps % (total_timesteps/100) == 0:
-                average_episode_return= eval_policy(agent, env_name, i, num_evaluate)
+                average_episode_return, return_std = eval_policy(agent, env_name, i, num_evaluate)
                 return_list.append(average_episode_return) 
+                std_list.append(return_std)       
                 if average_episode_return > best_episode_return:
                     best_episode_return = average_episode_return
                     agent.save_experiment(target_folder, i)
@@ -52,11 +53,11 @@ def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, tota
             if num_timesteps >= total_timesteps:
                 break
 
-    return return_list
+    return return_list, std_list
 
 
 # TD3wPER
-# Runs policy/agent for X episodes and returns average reward
+# Runs policy/agent for X episodes and returns average reward and reward std
 # Different X seeds are used for the eval environment
 def eval_policy(agent, env_name, seed, eval_episodes=10):
     eval_env = gym.make(env_name)
@@ -76,12 +77,13 @@ def eval_policy(agent, env_name, seed, eval_episodes=10):
             avg_reward[i] += reward
 
     average_reward = np.mean(avg_reward)
+    reward_std = np.std(avg_reward, ddof=1)
 
     print("---------------------------------------")
-    print(f"Evaluation over {eval_episodes} episodes: {average_reward:.3f}")
+    print(f"Evaluation over {eval_episodes} episodes: {average_reward:.3f} +- {reward_std:.3f} ")
     print("---------------------------------------")
 
-    return average_reward
+    return average_reward, reward_std
 
 
 # TD3

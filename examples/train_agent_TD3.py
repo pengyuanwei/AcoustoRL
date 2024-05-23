@@ -66,12 +66,16 @@ if __name__ == "__main__":
             device
         )
 
-        return_list = general_utils.train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, target_folder, i)
+        return_list, std_list = general_utils.train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, target_folder, i)
 
         # Define the the path of target file
         file_name1 = f"return_list{i}.npy"
         target_file1 = os.path.join(target_folder, file_name1)
+        file_name2 = f"std_list{i}.npy"
+        target_file2 = os.path.join(target_folder, file_name2)
 
-        # Save the return
+        # Save the return and std
         return_list=np.array(return_list)
         np.save(target_file1, return_list)   # 保存为.npy格式
+        std_list=np.array(std_list)
+        np.save(target_file2, std_list)   # 保存为.npy格式

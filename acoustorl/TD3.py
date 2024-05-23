@@ -101,8 +101,8 @@ class TD3(object):
 		self.discount = discount
 		self.tau = tau
 		self.exploration_noise = exploration_noise
-		self.policy_noise = policy_noise * (self.max_action - self.min_action)/2.0
-		self.noise_clip = noise_clip * (self.max_action - self.min_action)/2.0
+		self.policy_noise = policy_noise * (self.max_action - self.min_action) / 2.0
+		self.noise_clip = noise_clip * (self.max_action - self.min_action) / 2.0
 		self.policy_freq = policy_freq
 
 		self.total_it = 0

@@ -7,92 +7,81 @@ import gymnasium as gym
 import copy
 
 
-def set_seed(seed, env=None):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        #torch.cuda.manual_seed_all(seed)  # If you are using multi-GPU
-    if env is not None:
-        env.reset(seed=seed)
-        if hasattr(env.action_space, 'seed'):
-            env.action_space.seed(seed)
-        if hasattr(env.observation_space, 'seed'):
-            env.observation_space.seed(seed)
-
-
 # TD3wPER
-def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, max_timesteps, target_folder, i):
+def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, target_folder, i):
     num_evaluate = 5
     num_timesteps = 0
     best_episode_return = 0
     return_list = []
     std_list = []
-    num = 0
-    while num_timesteps <= total_timesteps:
-        # Evaluate every 10000 time steps, each evaluation reports the average reward over 10 episodes with no exploration noise.
-        # The results are reported over 10 random seeds of the Gym simulator and the network initialization.
-        if num == 0 or num >= 10000:
-            num = 0
-            average_episode_return, return_std = eval_policy(agent, env_name, num_evaluate, max_timesteps)
-            return_list.append(average_episode_return) 
-            std_list.append(return_std)       
-            if average_episode_return > best_episode_return:
-                best_episode_return = average_episode_return
-                agent.save_experiment(target_folder, i)
-        
-        state, info = env.reset()
+
+    while num_timesteps < total_timesteps:
+
+        state, info = env.reset(seed=i)
         terminated, truncated = False, False
-        while not terminated and num < 10000:
-            if agent.replay_buffer.memory_num > minimal_size:
+
+        while not terminated and not truncated:
+            if agent.replay_buffer.memory_num < minimal_size:
                 action = env.action_space.sample()
             else:
                 action = agent.take_action(state)
+
             next_state, reward, terminated, truncated, info = env.step(action)
             agent.replay_buffer.store(state, action, reward, next_state, terminated)
+
             state = next_state
+
             if agent.replay_buffer.memory_num > minimal_size:
                 agent.train(batch_size)
-            num_timesteps += 1
-            num += 1
+
+            # Evaluate every 1% total timesteps, each evaluation reports the average reward over num_evaluate with no exploration noise.
+            # The results are reported over 10 random seeds of the Gym simulator and the network initialization.
             if num_timesteps % (total_timesteps/100) == 0:
+                average_episode_return= eval_policy(agent, env_name, i, num_evaluate)
+                return_list.append(average_episode_return) 
+                if average_episode_return > best_episode_return:
+                    best_episode_return = average_episode_return
+                    agent.save_experiment(target_folder, i)
+
                 percentage = num_timesteps/(total_timesteps/100)
                 print("---------------------------------------")
                 print("The No.", i, "th training has been finished:", percentage, "%.\n")
                 print("---------------------------------------")
 
-    return return_list, std_list
+            num_timesteps += 1
+            if num_timesteps >= total_timesteps:
+                break
+
+    return return_list
 
 
 # TD3wPER
 # Runs policy/agent for X episodes and returns average reward
-# Different seeds are used for the eval environment
-def eval_policy(agent, env_name, eval_episodes=10, max_timesteps=1000):
+# Different X seeds are used for the eval environment
+def eval_policy(agent, env_name, seed, eval_episodes=10):
     eval_env = gym.make(env_name)
 
     avg_reward = np.zeros([eval_episodes])
     for i in range(eval_episodes):
-        set_seed(seed=10*(i+1), env=eval_env)
 
-        num_timsteps = 0
-        state, info = eval_env.reset()
+        state, info = eval_env.reset(seed = seed+100)
         terminated, truncated = False, False
-        while not terminated and num_timsteps < max_timesteps:
+
+        while not terminated and not truncated:
             action = agent.take_action(state, explore=False)
+
             next_state, reward, terminated, truncated, info = eval_env.step(action)
+
             state = next_state
             avg_reward[i] += reward
-            num_timsteps += 1
 
     average_reward = np.mean(avg_reward)
-    reward_std = np.std(avg_reward, ddof=1)
 
     print("---------------------------------------")
-    print(f"Evaluation over {eval_episodes} episodes: {average_reward:.3f} +- {reward_std:.3f} ")
+    print(f"Evaluation over {eval_episodes} episodes: {average_reward:.3f}")
     print("---------------------------------------")
 
-    return average_reward, reward_std
+    return average_reward
 
 
 # TD3

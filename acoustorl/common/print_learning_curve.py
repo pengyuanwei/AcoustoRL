@@ -6,128 +6,74 @@ from tqdm import tqdm
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-from TD3_v1 import TD3
-import os, sys
-
-import planning_gym
-from planning_gym.wrappers.discrete_action import DiscreteActions
-from planning_gym.utils import general_utils
+import os
 
 
+# Generate a total learning curve based on 5 sub learning curves: the bold line in the shaded area consists of 
+# the mean of the five average rewards at each timestep, and the shaded contour line consists of the quartiles of the mean.
 if __name__ == "__main__":
-    total_timesteps = 1000000
-    minimal_buffer_size = 100000
-    eval_interval = 5000
+    #total_timesteps = 1000000
+    #minimal_buffer_size = 100000
+    #eval_interval = 5000
+    num_experiment = 5
     env_name = "Hopper-v3"
-    num_experiment = 10
 
-
-    # 读取
-    total_return_array = np.zeros([num_experiment,180])
-
-    for i in range(num_experiment):
-        return_list = np.load('TD3_%s_data_v1/return_list%d.npy'%(env_name, i))
-        return_list = return_list[-180:]
-        total_return_array[i] = return_list
-
-    sum_return_array = total_return_array.sum(axis=0)
-    avg_return = sum_return_array/num_experiment
-
-    transpose_array = total_return_array.T
-
-    return_std = np.zeros(len(transpose_array))
-    for i in range(len(transpose_array)):
-        return_std[i] = np.std(transpose_array[i], ddof=1)
-
-    print(avg_return.shape)
-    print(return_std.shape)
-
-    avg_return = avg_return.tolist()
-    return_std = return_std.tolist()
-
-    upper_bound = [avg_return[i] + return_std[i]/2 for i in range(len(avg_return))]
-    lower_bound = [avg_return[i] - return_std[i]/2 for i in range(len(avg_return))]
-        
-    episodes_list = list(range(len(avg_return)))
-    episodes_list = [x/199 for x in episodes_list]
-
-    plt.fill_between(episodes_list, upper_bound, lower_bound, color=(1.0, 0.0, 0.0, 0.1))
-    plt.plot(episodes_list, avg_return, color=(1.0, 0.0, 0.0, 1.0), label='Policy update delay = 1')
-    plt.xlabel('Time steps (1e6)')
-    plt.ylabel('Average Return')
-    plt.title('TD3 on {}'.format(env_name))
+    algorithm = "TD3"
+    target_folder = "../../../test_results/%s_%s"%(env_name, algorithm)
 
     # 读取
-    total_return_array = np.zeros([num_experiment,180])
-
+    total_return_array = np.zeros([num_experiment,90])
     for i in range(num_experiment):
-        return_list = np.load('TD3_%s_data_v0/return_list%d.npy'%(env_name, i))
-        return_list = return_list[-180:]
+        file_name = f"return_list{i}.npy"
+        target_file = os.path.join(target_folder, file_name)
+        return_list = np.load(target_file)
+        return_list = return_list[-90:]
         total_return_array[i] = return_list
 
-    sum_return_array = total_return_array.sum(axis=0)
-    avg_return = sum_return_array/num_experiment
+    # Calculate the mean
+    avg_return = np.mean(total_return_array, axis=0)
 
-    transpose_array = total_return_array.T
+    # 计算第 25 和第 75 百分位数 (用于阴影区域)
+    Q1 = np.percentile(total_return_array, 25, axis=0)
+    Q3 = np.percentile(total_return_array, 75, axis=0)
 
-    return_std = np.zeros(len(transpose_array))
-    for i in range(len(transpose_array)):
-        return_std[i] = np.std(transpose_array[i], ddof=1)
+    # 绘制阴影区域
+    plt.fill_between(range(avg_return.shape[0]), Q1, Q3, color=(0.0, 0.0, 1.0, 0.1), alpha=0.2)
+    # 绘制平均值曲线
+    plt.plot(avg_return, label=algorithm, color=(0.0, 0.0, 1.0, 1.0), linewidth=2)
 
-    print(avg_return.shape)
-    print(return_std.shape)
 
-    avg_return = avg_return.tolist()
-    return_std = return_std.tolist()
-
-    upper_bound = [avg_return[i] + return_std[i]/4 for i in range(len(avg_return))]
-    lower_bound = [avg_return[i] - return_std[i]/4 for i in range(len(avg_return))]
-        
-    episodes_list = list(range(len(avg_return)))
-    episodes_list = [x/199 for x in episodes_list]
-
-    plt.fill_between(episodes_list, upper_bound, lower_bound, color=(0.0, 0.0, 1.0, 0.1))
-    plt.plot(episodes_list, avg_return, color=(0.0, 0.0, 1.0, 1.0), label='Policy update delay = 2')
-
+    ####################################################################################################
+    algorithm = "TD3wPER"
+    target_folder = "../../../test_results/%s_%s"%(env_name, algorithm)
 
     # 读取
-    total_return_array = np.zeros([num_experiment,180])
-
+    total_return_array = np.zeros([num_experiment,90])
     for i in range(num_experiment):
-        return_list = np.load('TD3_%s_data/return_list%d.npy'%(env_name, i))
-        return_list = return_list[-180:]
+        file_name = f"return_list{i}.npy"
+        target_file = os.path.join(target_folder, file_name)
+        return_list = np.load(target_file)
+        return_list = return_list[-90:]
         total_return_array[i] = return_list
 
-    sum_return_array = total_return_array.sum(axis=0)
-    avg_return = sum_return_array/num_experiment
+    # Calculate the mean
+    avg_return = np.mean(total_return_array, axis=0)
 
-    transpose_array = total_return_array.T
+    # 计算第 25 和第 75 百分位数 (用于阴影区域)
+    Q1 = np.percentile(total_return_array, 25, axis=0)
+    Q3 = np.percentile(total_return_array, 75, axis=0)
 
-    return_std = np.zeros(len(transpose_array))
-    for i in range(len(transpose_array)):
-        return_std[i] = np.std(transpose_array[i], ddof=1)
+    # 绘制阴影区域
+    plt.fill_between(range(avg_return.shape[0]), Q1, Q3, color=(1.0, 0.0, 0.0, 0.1), alpha=0.2)
+    # 绘制平均值曲线
+    plt.plot(avg_return, label=algorithm, color=(1.0, 0.0, 0.0, 1.0), linewidth=2)
 
-    print(avg_return.shape)
-    print(return_std.shape)
 
-    avg_return = avg_return.tolist()
-    return_std = return_std.tolist()
-
-    upper_bound = [avg_return[i] + return_std[i]/4 for i in range(len(avg_return))]
-    lower_bound = [avg_return[i] - return_std[i]/4 for i in range(len(avg_return))]
-        
-    episodes_list = list(range(len(avg_return)))
-    episodes_list = [x/199 for x in episodes_list]
-
-    plt.fill_between(episodes_list, upper_bound, lower_bound, color=(0.0, 1.0, 0.0, 0.1))
-    plt.plot(episodes_list, avg_return, color=(0.0, 1.0, 0.0, 1.0), label='Policy update delay = 3')
+    # 添加标签和图例
+    plt.xlabel('Timesteps')
+    plt.ylabel('Returns')
+    plt.title(env_name)
     plt.legend(loc='lower right')
 
-
-    plt.xlabel('Time steps (1e6)')
-    plt.ylabel('Average Return')
-    plt.title('TD3 on {}'.format(env_name))
-
+    # 显示图形
     plt.show()
-    plt.savefig('learning_curve.png')
-    #plt.clf()

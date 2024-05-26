@@ -65,7 +65,7 @@ def eval_policy(agent, env_name, seed, eval_episodes=10):
     avg_reward = np.zeros([eval_episodes])
     for i in range(eval_episodes):
 
-        state, info = eval_env.reset(seed = seed+100)
+        state, info = eval_env.reset(seed = i+100)
         terminated, truncated = False, False
 
         while not terminated and not truncated:

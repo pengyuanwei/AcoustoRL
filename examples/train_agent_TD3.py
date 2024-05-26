@@ -5,15 +5,18 @@ import collections
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-import os, sys
+import os
 
 from acoustorl.TD3 import TD3
 from acoustorl.common import general_utils
 
 
+# Train models separately using 5 different random seeds.
+# During each training, every time evaluation uses 5 random seeds different from the training random seed.
+# After each evaluation, calculate the average reward obtained by the model and save it.
 if __name__ == "__main__":
     env_name = 'Hopper-v3'  #'HalfCheetah-v2'
-    algorithm = 'TD3_single_evaluate_seed'
+    algorithm = 'TD3'
 
     # Define hyperparameters
     total_timesteps = 1000000
@@ -45,6 +48,7 @@ if __name__ == "__main__":
         random.seed(i)
         np.random.seed(i)
         torch.manual_seed(i)
+        torch.cuda.manual_seed(i)
 
         state_dim = env.observation_space.shape[0]
         action_dim = env.action_space.shape[0]

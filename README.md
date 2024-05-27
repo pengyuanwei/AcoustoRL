@@ -1,8 +1,6 @@
 # AcoustoRL
 
-Hi there, this is a RL implementation Python library. 
-
-
+Hi there, this is a RL implementation Python library.  We will include more RL models in our future plan, so please follow thiss rep.
 
 ## Installation
 
@@ -29,13 +27,20 @@ pip install -e .
 
 ## File Structure
 
+## Implementation Details
+1. train.
 
+
+2. test.
 
 
 
 ## Requirements
+python --3.8
+pytorch --
+cuda --
 
-Gymnasium
+Gymnasium --
 
 
 

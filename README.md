@@ -17,7 +17,10 @@ cd PATH\AcoustoRL
 pip install -e .
 ~~~
 
-
+## Testing
+~~~python
+python train_agent_TD3.py
+~~~
 
 ## Contents
 

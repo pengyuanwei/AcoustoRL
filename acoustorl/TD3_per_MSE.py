@@ -3,12 +3,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import os
 
-from acoustorl.common.per import ReplayBuffer
+from acoustic_levitation_gym.utils.per import ReplayBuffer
 
-# Using per.py, PrioritizedExperienceReplay
-# Optimized function train(): use Huber loss
+# Modified from TD3wPP_v1.py
+# Using per.py, PrioritizedReplayBuffer
+# Optimized function train()
 
 
 class Actor(nn.Module):
@@ -88,9 +88,9 @@ class TD3():
 		min_action,
 		max_action,
 		exploration_noise=0.1,
-		discount=0.99,
-		tau=0.005,
 		policy_noise=0.2,		
+		tau=0.005,
+		discount=0.99,
 		noise_clip=0.5,
 		policy_freq=2,
 		replay_size=1e6,
@@ -105,17 +105,17 @@ class TD3():
 
 		self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
 		self.actor_target = copy.deepcopy(self.actor)
-		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=2e-4)
 
 		self.critic = Critic(self.state_dim, self.action_dim).to(device)
 		self.critic_target = copy.deepcopy(self.critic)
-		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
+		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=5e-4)
 
 		self.discount = discount
 		self.tau = tau
 		self.exploration_noise = exploration_noise
-		self.policy_noise = policy_noise * (self.max_action - self.min_action) / 2.0
-		self.noise_clip = noise_clip * (self.max_action - self.min_action) / 2.0
+		self.policy_noise = policy_noise
+		self.noise_clip = noise_clip
 		self.policy_freq = policy_freq
 
 		self.total_it = 0
@@ -124,19 +124,16 @@ class TD3():
                                           act_dim = self.action_dim,
                                           size = self.replay_size,
                                           device = self.device)
-		
-		# from ElegantRL
-		self.criterion = torch.nn.SmoothL1Loss(reduction="none")
 
 
 	def reinitialize(self):
 		self.actor.reinitialize()
 		self.actor_target = copy.deepcopy(self.actor)
-		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=2e-4)
 
 		self.critic.reinitialize()
 		self.critic_target = copy.deepcopy(self.critic)
-		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
+		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=5e-4)
 
 
 	def reinitialize_replay_buffer(self):
@@ -156,7 +153,7 @@ class TD3():
 		return action
 
 
-	def train(self, batch_size=256):
+	def train(self, batch_size):
 		self.total_it += 1
 
 		# Sample replay buffer 
@@ -174,7 +171,7 @@ class TD3():
 		next_states = np.array(next_states)
 		dones = np.array(dones)
 		ISWeights = np.array(ISWeights)
-
+		
 		# Convert lists to tensors
 		states = torch.tensor(states, dtype=torch.float32, device=self.device)
 		actions = torch.tensor(actions, dtype=torch.float32, device=self.device)
@@ -196,13 +193,13 @@ class TD3():
 			# Compute the target Q value
 			target_Q1, target_Q2 = self.critic_target(next_states, next_action)
 			target_Q = torch.min(target_Q1, target_Q2)
-			target_Q = rewards + (1-dones) * self.discount * target_Q
+			target_Q = rewards + (1-dones)*self.discount*target_Q
 
 		# Get current Q estimates
 		current_Q1, current_Q2 = self.critic(states, actions)
 
 		# from ElegantRL
-		td_errors = self.criterion(current_Q1, target_Q) + self.criterion(current_Q2, target_Q)
+		td_errors = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
 		# update priority
 		self.replay_buffer.batch_update(tree_idx=tree_idx, abs_errors=td_errors.detach().cpu().numpy().squeeze())  
 	
@@ -234,6 +231,10 @@ class TD3():
 				target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
 
+	def weighted_mse_loss(self, input, target, weight):
+		return torch.sum(weight * (input - target) ** 2).mean()
+
+
 	def save(self, filename, save_dir):
 		torch.save(self.critic.state_dict(), save_dir + "/critic%d.pth"%(filename))
 		torch.save(self.critic_optimizer.state_dict(), save_dir + "/critic_optimizer%d.pth"%(filename))
@@ -252,17 +253,9 @@ class TD3():
 		self.actor_target = copy.deepcopy(self.actor)
 
 
-	def save_experiment(self, target_folder, i):
-		# 使用循环来处理文件名和保存过程以减少代码重复，提高代码的可维护性和可读性。
-		# Define the base names and corresponding objects to save
-		file_names = [
-			(f"critic{i}.pth", self.critic.state_dict()),
-			(f"critic_optimizer{i}.pth", self.critic_optimizer.state_dict()),
-			(f"actor{i}.pth", self.actor.state_dict()),
-			(f"actor_optimizer{i}.pth", self.actor_optimizer.state_dict())
-		]
+	def save_experiment(self, env_name, i):
+		torch.save(self.critic.state_dict(), "TD3_%s_data/critic%d.pth"%(env_name, i))
+		torch.save(self.critic_optimizer.state_dict(), "TD3_%s_data/critic_optimizer%d.pth"%(env_name, i))
 		
-		# Save each file
-		for file_name, state_dict in file_names:
-			target_file = os.path.join(target_folder, file_name)
-			torch.save(state_dict, target_file)
+		torch.save(self.actor.state_dict(), "TD3_%s_data/actor%d.pth"%(env_name, i))
+		torch.save(self.actor_optimizer.state_dict(), "TD3_%s_data/actor_optimizer%d.pth"%(env_name, i))

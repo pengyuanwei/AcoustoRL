@@ -1,7 +1,7 @@
 import numpy as np
 
 
-# https://github.com/kaixindelele/DRLib/blob/main/memory/sp_per_memory_torch.py#L74
+# Copy from: https://github.com/kaixindelele/DRLib/blob/main/memory/sp_per_memory_torch.py
 # Proportion-based prioritization
 
 

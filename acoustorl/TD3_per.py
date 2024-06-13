@@ -5,10 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 
-from acoustorl.common.general_utils import ReplayBuffer
+from acoustorl.common.per import ReplayBuffer
 
-# Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
-# Paper: https://arxiv.org/abs/1802.09477
+# Using per.py, PrioritizedExperienceReplay
 
 
 class Actor(nn.Module):
@@ -75,10 +74,11 @@ class TD3(object):
 		exploration_noise=0.1,
 		discount=0.99,
 		tau=0.005,
-		policy_noise=0.2,
+		policy_noise=0.2,		
 		noise_clip=0.5,
 		policy_freq=2,
 		replay_size=1e6,
+		if_use_huber_loss=False,
 		device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	):
 		self.state_dim = state_dim
@@ -88,13 +88,13 @@ class TD3(object):
 		self.max_action = torch.tensor(max_action).to(device)
 		self.min_action = torch.tensor(min_action).to(device)
 
-		self.actor = Actor(state_dim, action_dim, max_action).to(device)
+		self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
 		self.actor_target = copy.deepcopy(self.actor)
-		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=2e-4)
 
-		self.critic = Critic(state_dim, action_dim).to(device)
+		self.critic = Critic(self.state_dim, self.action_dim).to(device)
 		self.critic_target = copy.deepcopy(self.critic)
-		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
+		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=5e-4)
 
 		self.discount = discount
 		self.tau = tau
@@ -105,13 +105,17 @@ class TD3(object):
 
 		self.total_it = 0
 
-		self.replay_buffer = ReplayBuffer(state_dim = self.state_dim,
-                                          action_dim = self.action_dim,
-                                          max_size = self.replay_size,
+		self.replay_buffer = ReplayBuffer(obs_dim = self.state_dim,
+                                          act_dim = self.action_dim,
+                                          size = self.replay_size,
                                           device = self.device)
 		
-		# Instantiation the MSE loss class
-		self.criterion = torch.nn.MSELoss(reduction="mean")
+		self.if_use_huber_loss = if_use_huber_loss
+		# Instantiation the loss class (Huber or MSE)
+		if if_use_huber_loss:
+			self.criterion = torch.nn.SmoothL1Loss(reduction="none")
+		else:
+			self.criterion = torch.nn.MSELoss(reduction="mean")
 
 
 	def take_action(self, state, explore=True):
@@ -122,34 +126,60 @@ class TD3(object):
 			action = (action + noise).clamp(self.min_action, self.max_action)
 		action = action.cpu().data.numpy().flatten()
 		return action
-	
+
 
 	def train(self, batch_size=256):
 		self.total_it += 1
 
 		# Sample replay buffer 
-		state, action, reward, next_state, done = self.replay_buffer.sample_batch(batch_size)
+		data = self.replay_buffer.sample_batch(batch_size)
+
+		tree_idx, batch_memory, ISWeights = data
+
+		# Unpack batch_memory into separate lists
+		states, actions, rewards, next_states, dones = map(list, zip(*batch_memory))
+
+		# Convert lists to NumPy arrays
+		states = np.array(states)
+		actions = np.array(actions)
+		rewards = np.array(rewards)
+		next_states = np.array(next_states)
+		dones = np.array(dones)
+		ISWeights = np.array(ISWeights)
+		
+		# Convert lists to tensors
+		states = torch.tensor(states, dtype=torch.float32, device=self.device)
+		actions = torch.tensor(actions, dtype=torch.float32, device=self.device)
+		rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)  # Add an extra dimension
+		next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device)
+		dones = torch.tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)  # Add an extra dimension
+		ISWeights = torch.tensor(ISWeights, dtype=torch.float32, device=self.device)
 
 		with torch.no_grad():
 			# Select action according to policy and add clipped noise
 			noise = (
-				torch.randn_like(action) * self.policy_noise
+				torch.randn_like(actions) * self.policy_noise
 			).clamp(-self.noise_clip, self.noise_clip)
 			
 			next_action = (
-				self.actor_target(next_state) + noise
+				self.actor_target(next_states) + noise
 			).clamp(-self.max_action, self.max_action)
 
 			# Compute the target Q value
-			target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+			target_Q1, target_Q2 = self.critic_target(next_states, next_action)
 			target_Q = torch.min(target_Q1, target_Q2)
-			target_Q = reward + (1-done) * self.discount * target_Q
+			target_Q = rewards + (1-dones)*self.discount*target_Q
 
 		# Get current Q estimates
-		current_Q1, current_Q2 = self.critic(state, action)
+		current_Q1, current_Q2 = self.critic(states, actions)
 
-		# Compute critic loss (TD errors)
-		critic_loss = self.criterion(current_Q1, target_Q) + self.criterion(current_Q2, target_Q)
+		# update priority
+		new_priorities = torch.abs(target_Q - (current_Q1 + current_Q2) / 2)
+		self.replay_buffer.batch_update(tree_idx=tree_idx, abs_errors=new_priorities.detach().cpu().numpy().squeeze())  
+	
+		# Compute critic loss; from ElegantRL
+		td_errors = self.criterion(current_Q1, target_Q) + self.criterion(current_Q2, target_Q)
+		critic_loss = (td_errors * ISWeights).mean()
 
 		# Optimize the critic
 		self.critic_optimizer.zero_grad()
@@ -159,8 +189,8 @@ class TD3(object):
 		# Delayed policy updates
 		if self.total_it % self.policy_freq == 0:
 
-			# Compute actor losse
-			actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
+			# Compute actor loss; elegantRL: use target critic
+			actor_loss = -self.critic_target.Q1(states, self.actor(states)).mean()
 			
 			# Optimize the actor 
 			self.actor_optimizer.zero_grad()
@@ -175,21 +205,21 @@ class TD3(object):
 				target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
 
-	def save(self, filename):
-		torch.save(self.critic.state_dict(), filename + "_critic")
-		torch.save(self.critic_optimizer.state_dict(), filename + "_critic_optimizer")
+	def save(self, filename, save_dir):
+		torch.save(self.critic.state_dict(), save_dir + "/critic%d.pth"%(filename))
+		torch.save(self.critic_optimizer.state_dict(), save_dir + "/critic_optimizer%d.pth"%(filename))
 		
-		torch.save(self.actor.state_dict(), filename + "_actor")
-		torch.save(self.actor_optimizer.state_dict(), filename + "_actor_optimizer")
+		torch.save(self.actor.state_dict(), save_dir + "/actor%d.pth"%(filename))
+		torch.save(self.actor_optimizer.state_dict(), save_dir + "/actor_optimizer%d.pth"%(filename))
 
 
-	def load(self, filename):
-		self.critic.load_state_dict(torch.load(filename + "_critic"))
-		self.critic_optimizer.load_state_dict(torch.load(filename + "_critic_optimizer"))
+	def load(self, filename, save_dir):
+		self.critic.load_state_dict(torch.load(save_dir + "/critic%d.pth"%(filename)))
+		self.critic_optimizer.load_state_dict(torch.load(save_dir + "/critic_optimizer%d.pth"%(filename)))
 		self.critic_target = copy.deepcopy(self.critic)
 
-		self.actor.load_state_dict(torch.load(filename + "_actor"))
-		self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))
+		self.actor.load_state_dict(torch.load(save_dir + "/actor%d.pth"%(filename)))
+		self.actor_optimizer.load_state_dict(torch.load(save_dir + "/actor_optimizer%d.pth"%(filename)))
 		self.actor_target = copy.deepcopy(self.actor)
 
 

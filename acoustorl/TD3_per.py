@@ -91,11 +91,11 @@ class TD3(object):
 
 		self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
 		self.actor_target = copy.deepcopy(self.actor)
-		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=2e-4)
+		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
 
 		self.critic = Critic(self.state_dim, self.action_dim).to(device)
 		self.critic_target = copy.deepcopy(self.critic)
-		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=5e-4)
+		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
 
 		self.discount = discount
 		self.tau = tau
@@ -133,27 +133,24 @@ class TD3(object):
 		self.total_it += 1
 
 		# Sample replay buffer 
-		data = self.replay_buffer.sample_batch(batch_size)
-
-		tree_idx, batch_memory, ISWeights = data
+		tree_idx, batch_memory, ISWeights = self.replay_buffer.sample_batch(batch_size)
 
 		# Unpack batch_memory into separate lists
-		states, actions, rewards, next_states, dones = map(list, zip(*batch_memory))
+		states, actions, rewards, next_states, dones = zip(*batch_memory)
 
-		# Convert lists to NumPy arrays
+		# Convert lists to NumPy arrays, and then convert to tensors
 		states = np.array(states)
 		actions = np.array(actions)
 		rewards = np.array(rewards)
 		next_states = np.array(next_states)
 		dones = np.array(dones)
-		ISWeights = np.array(ISWeights)
-		
-		# Convert lists to tensors
+
 		states = torch.tensor(states, dtype=torch.float32, device=self.device)
 		actions = torch.tensor(actions, dtype=torch.float32, device=self.device)
 		rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)  # Add an extra dimension
 		next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device)
 		dones = torch.tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)  # Add an extra dimension
+
 		ISWeights = torch.tensor(ISWeights, dtype=torch.float32, device=self.device)
 
 		with torch.no_grad():
@@ -191,7 +188,7 @@ class TD3(object):
 		if self.total_it % self.policy_freq == 0:
 
 			# Compute actor loss; elegantRL: use target critic
-			actor_loss = -self.critic_target.Q1(states, self.actor(states)).mean()
+			actor_loss = -self.critic.Q1(states, self.actor(states)).mean()
 			
 			# Optimize the actor 
 			self.actor_optimizer.zero_grad()

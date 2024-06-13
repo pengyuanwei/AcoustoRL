@@ -127,7 +127,7 @@ class TD3(object):
 	def train(self, batch_size=256):
 		self.total_it += 1
 
-		# Sample replay buffer 
+		# Sample replay buffer (get tensors) (reward: torch.Size([256, 1]))
 		state, action, reward, next_state, done = self.replay_buffer.sample_batch(batch_size)
 
 		with torch.no_grad():

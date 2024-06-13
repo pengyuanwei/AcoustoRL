@@ -8,6 +8,7 @@ import os
 from acoustorl.common.per import ReplayBuffer
 
 # Using per.py, PrioritizedExperienceReplay
+# Loss function: MSE or Huber
 
 
 class Actor(nn.Module):

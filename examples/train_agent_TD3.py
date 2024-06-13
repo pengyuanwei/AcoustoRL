@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import os
 
-from acoustorl.TD3 import TD3
+from acoustorl.TD3_per import TD3
 from acoustorl.common import general_utils
 
 
@@ -16,7 +16,7 @@ from acoustorl.common import general_utils
 # After each evaluation, calculate the average reward obtained by the model and save it.
 if __name__ == "__main__":
     env_name = 'Hopper-v3'  #'HalfCheetah-v2'
-    algorithm = 'TD3'
+    algorithm = 'TD3_per_MSE'
 
     # Define hyperparameters
     total_timesteps = 1000000
@@ -68,7 +68,7 @@ if __name__ == "__main__":
             noise_clip = noise_clip,  
             policy_freq = policy_freq,
             replay_size = buffer_size,
-            #if_use_huber_loss = if_use_huber_loss,
+            if_use_huber_loss = if_use_huber_loss,
             device = device
         )
 

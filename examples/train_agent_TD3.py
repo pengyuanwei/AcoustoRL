@@ -20,17 +20,18 @@ if __name__ == "__main__":
 
     # Define hyperparameters
     total_timesteps = 1000000
-    max_timesteps = 1000
     discount = 0.99
     tau = 0.005  # 软更新参数
     buffer_size = 1000000
-    minimal_size = 100000
-    batch_size = 512
+    minimal_size = 25000
+    batch_size = 256
     exploration_noise = 0.1
     policy_noise = 0.2  # 高斯噪声标准差
     noise_clip = 0.5    
     policy_freq = 1
+    if_use_huber_loss = False
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
     print("The device is:", device)
     print("Using", algorithm, "on the environment", env_name)
 
@@ -56,18 +57,19 @@ if __name__ == "__main__":
         max_action = float(env.action_space.high[0])  # 动作最大值
 
         agent = TD3(
-            state_dim, 
-            action_dim, 
-            min_action, 
-            max_action, 
-            exploration_noise, 
-            discount, 
-            tau, 
-            policy_noise, 
-            noise_clip,  
-            policy_freq,
-            buffer_size,
-            device
+            state_dim = state_dim, 
+            action_dim = action_dim, 
+            min_action = min_action, 
+            max_action = max_action, 
+            exploration_noise = exploration_noise, 
+            discount = discount, 
+            tau = tau, 
+            policy_noise = policy_noise, 
+            noise_clip = noise_clip,  
+            policy_freq = policy_freq,
+            replay_size = buffer_size,
+            #if_use_huber_loss = if_use_huber_loss,
+            device = device
         )
 
         return_list, std_list = general_utils.train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, target_folder, i)

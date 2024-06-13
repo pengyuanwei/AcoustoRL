@@ -92,13 +92,12 @@ class ReplayBuffer(object):  # stored as ( s, a, r, s_ ) in SumTree
                  size=int(1e6),
                  device=None,
                  ):
+        self.device = device
         self.tree = SumTree(size)
         self.full_flag = False
         self.memory_num = 0
         self.memory_size = size
 
-        self.device = device
-        
     def store(self, state, action, reward, next_state, terminated):
         transition = (state, action, reward, next_state, terminated)
         max_p = np.max(self.tree.tree[-self.tree.capacity:])

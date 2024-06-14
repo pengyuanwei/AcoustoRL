@@ -15,8 +15,8 @@ from acoustorl.common import general_utils
 # During each training, every time evaluation uses 5 random seeds different from the training random seed.
 # After each evaluation, calculate the average reward obtained by the model and save it.
 if __name__ == "__main__":
-    env_name = 'Hopper-v3'  #'HalfCheetah-v2'
-    algorithm = 'TD3_per_MSE'
+    env_name = 'Walker2d-v4'  #'HalfCheetah-v2', 'Hopper-v3', 'Walker2d-v4'
+    algorithm = 'TD3_per_Huber'
 
     # Define hyperparameters
     total_timesteps = 1000000

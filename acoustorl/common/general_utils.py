@@ -7,7 +7,54 @@ import gymnasium as gym
 import copy
 
 
-# TD3wPER
+def train_off_policy_agent_experiment_independent_buffer(env, agent, buffer, batch_size, minimal_size, total_timesteps, env_name, target_folder, i):
+    num_evaluate = 5
+    num_timesteps = 0
+    best_episode_return = 0
+    return_list = []
+    std_list = []
+
+    while num_timesteps < total_timesteps:
+
+        state, info = env.reset(seed=i)
+        terminated, truncated = False, False
+
+        while not terminated and not truncated:
+            if buffer.memory_num < minimal_size:
+                action = env.action_space.sample()
+            else:
+                action = agent.take_action(state)
+
+            next_state, reward, terminated, truncated, info = env.step(action)
+            buffer.store(state, action, reward, next_state, terminated)
+
+            state = next_state
+
+            if buffer.memory_num > minimal_size:
+                agent.train(buffer, batch_size)
+
+            # Evaluate every 1% total timesteps, each evaluation reports the average reward over num_evaluate with no exploration noise.
+            # The results are reported over 10 random seeds of the Gym simulator and the network initialization.
+            if num_timesteps % (total_timesteps/100) == 0:
+                average_episode_return, return_std = eval_policy(agent, env_name, i, num_evaluate)
+                return_list.append(average_episode_return) 
+                std_list.append(return_std)       
+                if average_episode_return > best_episode_return:
+                    best_episode_return = average_episode_return
+                    agent.save_experiment(target_folder, i)
+
+                percentage = num_timesteps/(total_timesteps/100)
+                print("---------------------------------------")
+                print("The No.", i, "th training has been finished:", percentage, "%.\n")
+                print("---------------------------------------")
+
+            num_timesteps += 1
+            if num_timesteps >= total_timesteps:
+                break
+
+    return return_list, std_list
+
+
 def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, target_folder, i):
     num_evaluate = 5
     num_timesteps = 0
@@ -56,7 +103,6 @@ def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, tota
     return return_list, std_list
 
 
-# TD3wPER
 # Runs policy/agent for X episodes and returns average reward and reward std
 # Different X seeds are used for the eval environment
 def eval_policy(agent, env_name, seed, eval_episodes=10):
@@ -86,7 +132,6 @@ def eval_policy(agent, env_name, seed, eval_episodes=10):
     return average_reward, reward_std
 
 
-# TD3
 class ReplayBuffer(object):
     def __init__(self, 
                  state_dim, 

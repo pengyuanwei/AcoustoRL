@@ -12,14 +12,13 @@ import os
 # Generate a total learning curve based on 5 sub learning curves: the bold line in the shaded area consists of 
 # the mean of the five average rewards at each timestep, and the shaded contour line consists of the quartiles of the mean.
 if __name__ == "__main__":
-    #total_timesteps = 1000000
-    #minimal_buffer_size = 100000
-    #eval_interval = 5000
     num_experiment = 5
-    env_name = 'Walker2d-v4'  #'HalfCheetah-v2', 'Hopper-v3', 'Walker2d-v4'
+    env_name = 'HalfCheetah-v2'  #'HalfCheetah-v2', 'Hopper-v3', 'Walker2d-v4'
+    algorithm = ['TD3', 'TD3_per_mut', 'TD3_multi_update_times']
 
-    algorithm = "TD3"
-    target_folder = "../../../test_results/%s_%s"%(env_name, algorithm)
+
+    ####################################################################################################
+    target_folder = "../../../test_results/%s_%s"%(env_name, algorithm[0])
 
     # 读取
     total_return_array = np.zeros([num_experiment,100])
@@ -40,12 +39,11 @@ if __name__ == "__main__":
     # 绘制阴影区域
     plt.fill_between(range(avg_return.shape[0]), Q1, Q3, color=(0.0, 0.0, 1.0, 0.1), alpha=0.2)
     # 绘制平均值曲线
-    plt.plot(avg_return, label=algorithm, color=(0.0, 0.0, 1.0, 1.0), linewidth=2)
+    plt.plot(avg_return, label=algorithm[0], color=(0.0, 0.0, 1.0, 1.0), linewidth=2)
 
 
     ####################################################################################################
-    algorithm = "TD3_per_MSE"
-    target_folder = "../../../test_results/%s_%s"%(env_name, algorithm)
+    target_folder = "../../../test_results/%s_%s"%(env_name, algorithm[1])
 
     # 读取
     total_return_array = np.zeros([num_experiment,100])
@@ -66,12 +64,11 @@ if __name__ == "__main__":
     # 绘制阴影区域
     plt.fill_between(range(avg_return.shape[0]), Q1, Q3, color=(0.0, 1.0, 0.0, 0.1), alpha=0.2)
     # 绘制平均值曲线
-    plt.plot(avg_return, label=algorithm, color=(0.0, 1.0, 0.0, 1.0), linewidth=2)
+    plt.plot(avg_return, label=algorithm[1], color=(0.0, 1.0, 0.0, 1.0), linewidth=2)
 
 
     ####################################################################################################
-    algorithm = "TD3_per_Huber"
-    target_folder = "../../../test_results/%s_%s"%(env_name, algorithm)
+    target_folder = "../../../test_results/%s_%s"%(env_name, algorithm[2])
 
     # 读取
     total_return_array = np.zeros([num_experiment,100])
@@ -92,7 +89,7 @@ if __name__ == "__main__":
     # 绘制阴影区域
     plt.fill_between(range(avg_return.shape[0]), Q1, Q3, color=(1.0, 0.0, 0.0, 0.1), alpha=0.2)
     # 绘制平均值曲线
-    plt.plot(avg_return, label=algorithm, color=(1.0, 0.0, 0.0, 1.0), linewidth=2)
+    plt.plot(avg_return, label=algorithm[2], color=(1.0, 0.0, 0.0, 1.0), linewidth=2)
 
 
     # 添加标签和图例

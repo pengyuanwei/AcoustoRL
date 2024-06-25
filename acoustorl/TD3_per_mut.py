@@ -9,7 +9,7 @@ from acoustorl.common.per import ReplayBuffer
 
 # Using per.py, PrioritizedExperienceReplay
 # Loss function: MSE or Huber
-# Add "update times" or "Gradient steps": no guradually increasing
+# Multiple update times: add "update times" or "Gradient steps" (no guradually increasing).
 
 
 class Actor(nn.Module):
@@ -66,7 +66,7 @@ class Critic(nn.Module):
 		return q1
 
 
-class TD3(object):
+class TD3():
 	def __init__(
 		self,
 		state_dim,

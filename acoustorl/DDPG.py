@@ -43,7 +43,7 @@ class Critic(nn.Module):
 		return self.l3(q)
 
 
-class DDPG(object):
+class DDPG():
 	def __init__(
 		self, 
 		state_dim, 

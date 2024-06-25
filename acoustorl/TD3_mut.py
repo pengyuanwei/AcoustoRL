@@ -5,10 +5,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 
-from acoustorl.common.per import ReplayBuffer
+from acoustorl.common.general_utils import ReplayBuffer
 
-# Using per.py, PrioritizedExperienceReplay
-# Loss function: MSE or Huber
+# Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
+# Paper: https://arxiv.org/abs/1802.09477
+# Multiple update times: add "update times" or "Gradient steps" (no guradually increasing).
 
 
 class Actor(nn.Module):
@@ -75,11 +76,11 @@ class TD3():
 		exploration_noise=0.1,
 		discount=0.99,
 		tau=0.005,
-		policy_noise=0.2,		
+		policy_noise=0.2,
 		noise_clip=0.5,
 		policy_freq=2,
 		replay_size=1e6,
-		if_use_huber_loss=False,
+		repeat_times=1.0,
 		device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	):
 		self.state_dim = state_dim
@@ -89,11 +90,11 @@ class TD3():
 		self.max_action = torch.tensor(max_action).to(device)
 		self.min_action = torch.tensor(min_action).to(device)
 
-		self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
+		self.actor = Actor(state_dim, action_dim, max_action).to(device)
 		self.actor_target = copy.deepcopy(self.actor)
 		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
 
-		self.critic = Critic(self.state_dim, self.action_dim).to(device)
+		self.critic = Critic(state_dim, action_dim).to(device)
 		self.critic_target = copy.deepcopy(self.critic)
 		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
 
@@ -105,18 +106,15 @@ class TD3():
 		self.policy_freq = policy_freq
 
 		self.total_it = 0
+		self.repeat_times = repeat_times
 
-		self.replay_buffer = ReplayBuffer(obs_dim = self.state_dim,
-                                          act_dim = self.action_dim,
-                                          size = self.replay_size,
+		self.replay_buffer = ReplayBuffer(state_dim = self.state_dim,
+                                          action_dim = self.action_dim,
+                                          max_size = self.replay_size,
                                           device = self.device)
 		
-		self.if_use_huber_loss = if_use_huber_loss
-		# Instantiation the loss class (Huber or MSE)
-		if if_use_huber_loss:
-			self.criterion = torch.nn.SmoothL1Loss(reduction="none")
-		else:
-			self.criterion = torch.nn.MSELoss(reduction="mean")
+		# Instantiation the MSE loss class
+		self.criterion = torch.nn.MSELoss(reduction="mean")
 
 
 	def take_action(self, state, explore=True):
@@ -127,80 +125,59 @@ class TD3():
 			action = (action + noise).clamp(self.min_action, self.max_action)
 		action = action.cpu().data.numpy().flatten()
 		return action
-
+	
 
 	def train(self, batch_size=256):
-		self.total_it += 1
+		update_times = self.repeat_times
+		for t in range(update_times):
+			self.total_it += 1
 
-		# Sample replay buffer 
-		tree_idx, batch_memory, ISWeights = self.replay_buffer.sample_batch(batch_size)
+			# Sample replay buffer (get tensors) (reward: torch.Size([256, 1]))
+			state, action, reward, next_state, done = self.replay_buffer.sample_batch(batch_size)
 
-		# Unpack batch_memory into separate lists
-		states, actions, rewards, next_states, dones = zip(*batch_memory)
+			with torch.no_grad():
+				# Select action according to policy and add clipped noise
+				noise = (
+					torch.randn_like(action) * self.policy_noise
+				).clamp(-self.noise_clip, self.noise_clip)
+				
+				next_action = (
+					self.actor_target(next_state) + noise
+				).clamp(-self.max_action, self.max_action)
 
-		# Convert lists to NumPy arrays, and then convert to tensors
-		states = np.array(states)
-		actions = np.array(actions)
-		rewards = np.array(rewards)
-		next_states = np.array(next_states)
-		dones = np.array(dones)
+				# Compute the target Q value
+				target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+				target_Q = torch.min(target_Q1, target_Q2)
+				target_Q = reward + (1-done) * self.discount * target_Q
 
-		states = torch.tensor(states, dtype=torch.float32, device=self.device)
-		actions = torch.tensor(actions, dtype=torch.float32, device=self.device)
-		rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)  # Add an extra dimension
-		next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device)
-		dones = torch.tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)  # Add an extra dimension
+			# Get current Q estimates
+			current_Q1, current_Q2 = self.critic(state, action)
 
-		ISWeights = torch.tensor(ISWeights, dtype=torch.float32, device=self.device)
+			# Compute critic loss (TD errors)
+			critic_loss = self.criterion(current_Q1, target_Q) + self.criterion(current_Q2, target_Q)
 
-		with torch.no_grad():
-			# Select action according to policy and add clipped noise
-			noise = (
-				torch.randn_like(actions) * self.policy_noise
-			).clamp(-self.noise_clip, self.noise_clip)
-			
-			next_action = (
-				self.actor_target(next_states) + noise
-			).clamp(-self.max_action, self.max_action)
+			# Optimize the critic
+			self.critic_optimizer.zero_grad()
+			critic_loss.backward()
+			self.critic_optimizer.step()
 
-			# Compute the target Q value
-			target_Q1, target_Q2 = self.critic_target(next_states, next_action)
-			target_Q = torch.min(target_Q1, target_Q2)
-			target_Q = rewards + (1-dones)*self.discount*target_Q
+			# Delayed policy updates
+			if self.total_it % self.policy_freq == 0:
 
-		# Get current Q estimates
-		current_Q1, current_Q2 = self.critic(states, actions)
+				# Compute actor losse
+				actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
+				
+				# Optimize the actor 
+				self.actor_optimizer.zero_grad()
+				actor_loss.backward()
+				self.actor_optimizer.step()
 
-		# update priority
-		new_priorities = torch.abs(target_Q - (current_Q1 + current_Q2) / 2)
-		self.replay_buffer.batch_update(tree_idx=tree_idx, abs_errors=new_priorities.detach().cpu().numpy().squeeze())  
-	
-		# Compute critic loss; from ElegantRL
-		td_errors = self.criterion(current_Q1, target_Q) + self.criterion(current_Q2, target_Q)
-		critic_loss = (td_errors * ISWeights).mean()
+				# Update the frozen target models
+				for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
+					target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-		# Optimize the critic
-		self.critic_optimizer.zero_grad()
-		critic_loss.backward()
-		self.critic_optimizer.step()
-
-		# Delayed policy updates
-		if self.total_it % self.policy_freq == 0:
-
-			# Compute actor loss; elegantRL: use target critic
-			actor_loss = -self.critic.Q1(states, self.actor(states)).mean()
-			
-			# Optimize the actor 
-			self.actor_optimizer.zero_grad()
-			actor_loss.backward()
-			self.actor_optimizer.step()
-
-			# Update the frozen target models
-			for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
-				target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-
-			for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
-				target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+				for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
+					target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
 
 	def save(self, filename, save_dir):

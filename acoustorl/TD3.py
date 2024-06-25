@@ -65,7 +65,7 @@ class Critic(nn.Module):
 		return q1
 
 
-class TD3(object):
+class TD3():
 	def __init__(
 		self,
 		state_dim,
@@ -159,7 +159,7 @@ class TD3(object):
 		# Delayed policy updates
 		if self.total_it % self.policy_freq == 0:
 
-			# Compute actor losse
+			# Compute actor loss
 			actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
 			
 			# Optimize the actor 
@@ -175,21 +175,21 @@ class TD3(object):
 				target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
 
-	def save(self, filename):
-		torch.save(self.critic.state_dict(), filename + "_critic")
-		torch.save(self.critic_optimizer.state_dict(), filename + "_critic_optimizer")
+	def save(self, filename, save_dir):
+		torch.save(self.critic.state_dict(), save_dir + "/critic%d.pth"%(filename))
+		torch.save(self.critic_optimizer.state_dict(), save_dir + "/critic_optimizer%d.pth"%(filename))
 		
-		torch.save(self.actor.state_dict(), filename + "_actor")
-		torch.save(self.actor_optimizer.state_dict(), filename + "_actor_optimizer")
+		torch.save(self.actor.state_dict(), save_dir + "/actor%d.pth"%(filename))
+		torch.save(self.actor_optimizer.state_dict(), save_dir + "/actor_optimizer%d.pth"%(filename))
 
 
-	def load(self, filename):
-		self.critic.load_state_dict(torch.load(filename + "_critic"))
-		self.critic_optimizer.load_state_dict(torch.load(filename + "_critic_optimizer"))
+	def load(self, filename, save_dir):
+		self.critic.load_state_dict(torch.load(save_dir + "/critic%d.pth"%(filename)))
+		self.critic_optimizer.load_state_dict(torch.load(save_dir + "/critic_optimizer%d.pth"%(filename)))
 		self.critic_target = copy.deepcopy(self.critic)
 
-		self.actor.load_state_dict(torch.load(filename + "_actor"))
-		self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))
+		self.actor.load_state_dict(torch.load(save_dir + "/actor%d.pth"%(filename)))
+		self.actor_optimizer.load_state_dict(torch.load(save_dir + "/actor_optimizer%d.pth"%(filename)))
 		self.actor_target = copy.deepcopy(self.actor)
 
 

@@ -69,7 +69,7 @@ class DDPG():
 
 		self.discount = discount
 		self.tau = tau
-		self.exploration_noise = exploration_noise
+		self.exploration_noise = exploration_noise * (self.max_action - self.min_action) / 2.0
 
 
 	def take_action(self, state, explore=True):

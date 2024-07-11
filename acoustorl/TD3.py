@@ -104,14 +104,9 @@ class TD3():
 		self.policy_freq = policy_freq
 
 		self.total_it = 0
-
-		self.replay_buffer = ReplayBuffer(state_dim = self.state_dim,
-                                          action_dim = self.action_dim,
-                                          max_size = self.replay_size,
-                                          device = self.device)
 		
 		# Instantiation the MSE loss class
-		self.criterion = torch.nn.MSELoss(reduction="mean")
+		self.criterion = nn.MSELoss(reduction="mean")
 
 
 	def take_action(self, state, explore=True):
@@ -124,11 +119,16 @@ class TD3():
 		return action
 	
 
-	def train(self, batch_size=256):
+	def soft_update(self, net, target_net):
+		for param, target_param in zip(net.parameters(), target_net.parameters()):
+			target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+
+
+	def train(self, replay_buffer, batch_size=256):
 		self.total_it += 1
 
 		# Sample replay buffer (get tensors) (reward: torch.Size([256, 1]))
-		state, action, reward, next_state, done = self.replay_buffer.sample_batch(batch_size)
+		state, action, reward, next_state, done = replay_buffer.sample_batch(batch_size)
 
 		with torch.no_grad():
 			# Select action according to policy and add clipped noise
@@ -168,11 +168,8 @@ class TD3():
 			self.actor_optimizer.step()
 
 			# Update the frozen target models
-			for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
-				target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-
-			for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
-				target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+			self.soft_update(self.critic, self.critic_target)  # 软更新价值网络
+			self.soft_update(self.actor, self.actor_target)  # 软更新策略网络
 
 
 	def save(self, filename, save_dir):

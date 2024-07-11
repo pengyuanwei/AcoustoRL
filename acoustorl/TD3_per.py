@@ -5,19 +5,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 
-from acoustorl.common.per import ReplayBuffer
 
 # Using per.py, PrioritizedExperienceReplay
 # Loss function: MSE or Huber
 
 
 class Actor(nn.Module):
-	def __init__(self, state_dim, action_dim, max_action):
+	def __init__(self, state_dim, hidden_dim, action_dim, max_action):
 		super(Actor, self).__init__()
 
-		self.l1 = nn.Linear(state_dim, 256)
-		self.l2 = nn.Linear(256, 256)
-		self.l3 = nn.Linear(256, action_dim)
+		self.l1 = nn.Linear(state_dim, hidden_dim)
+		self.l2 = nn.Linear(hidden_dim, hidden_dim)
+		self.l3 = nn.Linear(hidden_dim, action_dim)
 		
 		self.max_action = max_action
 		
@@ -29,18 +28,18 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-	def __init__(self, state_dim, action_dim):
+	def __init__(self, state_dim, hidden_dim, action_dim):
 		super(Critic, self).__init__()
 
 		# Q1 architecture
-		self.l1 = nn.Linear(state_dim + action_dim, 256)
-		self.l2 = nn.Linear(256, 256)
-		self.l3 = nn.Linear(256, 1)
+		self.l1 = nn.Linear(state_dim + action_dim, hidden_dim)
+		self.l2 = nn.Linear(hidden_dim, hidden_dim)
+		self.l3 = nn.Linear(hidden_dim, 1)
 
 		# Q2 architecture
-		self.l4 = nn.Linear(state_dim + action_dim, 256)
-		self.l5 = nn.Linear(256, 256)
-		self.l6 = nn.Linear(256, 1)
+		self.l4 = nn.Linear(state_dim + action_dim, hidden_dim)
+		self.l5 = nn.Linear(hidden_dim, hidden_dim)
+		self.l6 = nn.Linear(hidden_dim, 1)
 
 
 	def forward(self, state, action):
@@ -72,30 +71,29 @@ class TD3():
 		action_dim,
 		min_action,
 		max_action,
+		hidden_dim=256, 
 		exploration_noise=0.1,
 		discount=0.99,
 		tau=0.005,
+		actor_lr=3e-4, 
+		critic_lr=3e-4, 
+		device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
 		policy_noise=0.2,		
 		noise_clip=0.5,
 		policy_freq=2,
-		replay_size=1e6,
-		if_use_huber_loss=False,
-		device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+		if_use_huber_loss=False
 	):
-		self.state_dim = state_dim
-		self.action_dim = action_dim
-		self.replay_size = replay_size
 		self.device = device
 		self.max_action = torch.tensor(max_action).to(device)
 		self.min_action = torch.tensor(min_action).to(device)
 
-		self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
+		self.actor = Actor(state_dim, hidden_dim, action_dim, self.max_action).to(device)
 		self.actor_target = copy.deepcopy(self.actor)
-		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
 
-		self.critic = Critic(self.state_dim, self.action_dim).to(device)
+		self.critic = Critic(state_dim, hidden_dim, action_dim).to(device)
 		self.critic_target = copy.deepcopy(self.critic)
-		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
+		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr)
 
 		self.discount = discount
 		self.tau = tau
@@ -105,11 +103,6 @@ class TD3():
 		self.policy_freq = policy_freq
 
 		self.total_it = 0
-
-		self.replay_buffer = ReplayBuffer(obs_dim = self.state_dim,
-                                          act_dim = self.action_dim,
-                                          size = self.replay_size,
-                                          device = self.device)
 		
 		self.if_use_huber_loss = if_use_huber_loss
 		# Instantiation the loss class (Huber or MSE)
@@ -129,11 +122,16 @@ class TD3():
 		return action
 
 
-	def train(self, batch_size=256):
+	def soft_update(self, net, target_net):
+		for param, target_param in zip(net.parameters(), target_net.parameters()):
+			target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+
+
+	def train(self, replay_buffer, batch_size=256):
 		self.total_it += 1
 
 		# Sample replay buffer 
-		tree_idx, batch_memory, ISWeights = self.replay_buffer.sample_batch(batch_size)
+		tree_idx, batch_memory, ISWeights = replay_buffer.sample_batch(batch_size)
 
 		# Unpack batch_memory into separate lists
 		states, actions, rewards, next_states, dones = zip(*batch_memory)
@@ -196,11 +194,8 @@ class TD3():
 			self.actor_optimizer.step()
 
 			# Update the frozen target models
-			for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
-				target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-
-			for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
-				target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+			self.soft_update(self.critic, self.critic_target)  # 软更新价值网络
+			self.soft_update(self.actor, self.actor_target)  # 软更新策略网络
 
 
 	def save(self, filename, save_dir):

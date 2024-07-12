@@ -64,7 +64,7 @@ class Critic(nn.Module):
 		return q1
 
 
-class TD3():
+class TD3_per():
 	def __init__(
 		self,
 		state_dim,
@@ -98,13 +98,13 @@ class TD3():
 		self.discount = discount
 		self.tau = tau
 		self.exploration_noise = exploration_noise * (self.max_action - self.min_action) / 2.0
+		# Target policy smoothing is scaled wrt the action scale
 		self.policy_noise = policy_noise * (self.max_action - self.min_action) / 2.0
 		self.noise_clip = noise_clip * (self.max_action - self.min_action) / 2.0
 		self.policy_freq = policy_freq
 
 		self.total_it = 0
 		
-		self.if_use_huber_loss = if_use_huber_loss
 		# Instantiation the loss class (Huber or MSE)
 		if if_use_huber_loss:
 			self.criterion = torch.nn.SmoothL1Loss(reduction="none")

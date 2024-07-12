@@ -171,7 +171,7 @@ class TD3_per():
 
 		# update priority
 		new_priorities = torch.abs(target_Q - (current_Q1 + current_Q2) / 2)
-		self.replay_buffer.batch_update(tree_idx=tree_idx, abs_errors=new_priorities.detach().cpu().numpy().squeeze())  
+		replay_buffer.batch_update(tree_idx=tree_idx, abs_errors=new_priorities.detach().cpu().numpy().squeeze())  
 	
 		# Compute critic loss; from ElegantRL
 		td_errors = self.criterion(current_Q1, target_Q) + self.criterion(current_Q2, target_Q)

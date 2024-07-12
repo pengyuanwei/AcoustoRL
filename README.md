@@ -1,6 +1,6 @@
 # AcoustoRL
 
-Hi there, this is a RL implementation Python library.  We will include more RL models in our future plan, so please follow thiss rep.
+Hi there, this is a RL implementation Python library.  We will include more RL models in our future plan, so please follow this rep.
 
 ## Installation
 

@@ -102,6 +102,7 @@ if __name__ == "__main__":
                 max_size = args.buffer_size,
                 device = device
             )
+            replay_buffer.beta_increment_per_sampling = 1/args.total_timesteps
         else:
             replay_buffer = ReplayBuffer(
                 state_dim = state_dim,

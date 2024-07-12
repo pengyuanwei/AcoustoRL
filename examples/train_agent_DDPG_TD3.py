@@ -110,16 +110,17 @@ if __name__ == "__main__":
                 device = device
             )
 
-        return_list, std_list = train_off_policy_agent_experiment_independent_buffer(
-            env, 
-            agent, 
-            replay_buffer, 
-            args.batch_size, 
-            args.minimal_size, 
-            args.total_timesteps, 
-            args.env, 
-            target_folder, 
-            i
+        return_list, std_list = train_off_policy_agent(
+            env=env, 
+            agent=agent, 
+            replay_buffer=replay_buffer, 
+            batch_size=args.batch_size, 
+            minimal_size=args.minimal_size, 
+            total_timesteps=args.total_timesteps, 
+            update_times=args.update_times, 
+            env_name=args.env, 
+            target_folder=target_folder, 
+            seed=i
         )
 
         # Define the the path of target file

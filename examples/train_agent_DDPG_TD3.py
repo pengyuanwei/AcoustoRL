@@ -6,8 +6,28 @@ import gymnasium as gym
 
 from argparse import ArgumentParser
 
-from acoustorl.DDPG import DDPG
-from acoustorl.common import general_utils
+from acoustorl import *
+from acoustorl.common import per
+from acoustorl.common.general_utils import *
+
+
+def algorithm_instantiation(args, kwargs):
+    # Initialize agent
+    if args.algorithm == "TD3":
+        kwargs["policy_noise"] = args.policy_noise
+        kwargs["noise_clip"] = args.noise_clip
+        kwargs["policy_freq"] = args.policy_freq
+        agent = TD3(**kwargs)
+    elif args.algorithm == "TD3_per":
+        kwargs["policy_noise"] = args.policy_noise
+        kwargs["noise_clip"] = args.noise_clip
+        kwargs["policy_freq"] = args.policy_freq
+        kwargs["if_use_huber_loss"] = args.if_use_huber_loss
+        agent = TD3_per(**kwargs)
+    elif args.policy == "DDPG":
+        agent = DDPG(**kwargs)
+
+    return agent 
 
 
 # Train models separately using 5 different random seeds.
@@ -17,17 +37,21 @@ if __name__ == "__main__":
     parser = ArgumentParser(description='ArgumentParser for AcoustoRL')
     parser.add_argument(        "--algorithm", default="TD3", type=str, help='Algorithm name')
     parser.add_argument(              "--env", default="HalfCheetah-v2", type=str, help='Environment name')       
+    parser.add_argument(       "--hidden_dim", default=256, type=int, help='The number of neurons in the hidden layer')     
+    parser.add_argument("--exploration_noise", default=0.1, type=float, help='Exploration noise when select action')             
+    parser.add_argument(         "--discount", default=0.99, type=float, help='Discount factor')    
+    parser.add_argument(              "--tau", default=0.005, type=float, help='Soft update rate of target network')        
+    parser.add_argument(         "--actor_lr", default=3e-4, type=float, help='The learning rate of actor network')        
+    parser.add_argument(        "--critic_lr", default=3e-4, type=float, help='The learning rate of critic network')        
+    parser.add_argument(     "--policy_noise", default=0.2, type=float, help='Noise added to target policy during critic update')             
+    parser.add_argument(       "--noise_clip", default=0.5, type=float, help='Range to clip target policy noise')               
+    parser.add_argument(      "--policy_freq", default=1, type=int, help='Frequency of delayed policy updates')      
+    parser.add_argument(     "--update_times", default=1, type=int, help='The number of gradient descent steps performed per update')      
+    parser.add_argument("--if_use_huber_loss", default=False, type=bool, help='If use Huber loss')      
     parser.add_argument(  "--total_timesteps", default=1e6, type=int, help='Max time steps to run environment')   
-    parser.add_argument(       "--expl_noise", default=0.1, type=float, help='Std of Gaussian exploration noise')   
     parser.add_argument(      "--buffer_size", default=1e6, type=int, help='Buffer size')       
     parser.add_argument(     "--minimal_size", default=25e3, type=int, help='Time steps initial random policy is used')
     parser.add_argument(       "--batch_size", default=256, type=int, help='Batch size for both actor and critic')     
-    parser.add_argument(         "--discount", default=0.99, type=float, help='Discount factor')    
-    parser.add_argument(              "--tau", default=0.005, type=float, help='Soft update rate of target network')        
-    parser.add_argument("--exploration_noise", default=0.2, type=float, help='Exploration noise when select action')             
-    parser.add_argument(     "--policy_noise", default=0.2, type=float, help='Noise added to target policy during critic update')             
-    parser.add_argument(       "--noise_clip", default=0.5, type=float, help='Range to clip target policy noise')               
-    parser.add_argument(      "--policy_freq", default=2, type=int, help='Frequency of delayed policy updates')      
     args = parser.parse_args()
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -55,23 +79,38 @@ if __name__ == "__main__":
         min_action = float(env.action_space.low[0])
         max_action = float(env.action_space.high[0])  # 动作最大值
 
-        replay_buffer = general_utils.ReplayBuffer(state_dim = state_dim,
-                                                   action_dim = action_dim,
-                                                   max_size = args.buffer_size,
-                                                   device = device)
-        
-        agent = DDPG(
-            state_dim = state_dim, 
-            action_dim = action_dim, 
-            min_action = min_action,
-            max_action = max_action, 
-            exploration_noise = args.exploration_noise, 
-            discount = args.discount, 
-            tau = args.tau, 
-            device = device
-        )
+        kwargs = {
+            "state_dim": state_dim,
+            "action_dim": action_dim,
+            "min_action": min_action,
+            "max_action": max_action,
+            "hidden_dim": args.hidden_dim,
+            "exploration_noise": args.exploration_noise,
+            "discount": args.discount,
+            "tau": args.tau,
+            "actor_lr": args.actor_lr,
+            "critic_lr": args.critic_lr,
+            "device": device
+        }
 
-        return_list, std_list = general_utils.train_off_policy_agent_experiment_independent_buffer(
+        agent = algorithm_instantiation(args, kwargs)
+
+        if args.algorithm == "TD3_per":
+            replay_buffer = per(
+                state_dim = state_dim,
+                action_dim = action_dim,
+                max_size = args.buffer_size,
+                device = device
+            )
+        else:
+            replay_buffer = ReplayBuffer(
+                state_dim = state_dim,
+                action_dim = action_dim,
+                max_size = args.buffer_size,
+                device = device
+            )
+
+        return_list, std_list = train_off_policy_agent_experiment_independent_buffer(
             env, 
             agent, 
             replay_buffer, 

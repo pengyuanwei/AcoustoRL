@@ -1,9 +1,8 @@
+import os
 import copy
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import os
 
 
 # Re-tuned version of Deep Deterministic Policy Gradients (DDPG)

@@ -55,7 +55,7 @@ def train_off_policy_agent_experiment_independent_buffer(env, agent, buffer, bat
     return return_list, std_list
 
 
-def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, env_name, target_folder, i):
+def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, total_timesteps, update_times, env_name, target_folder, i):
     num_evaluate = 5
     num_timesteps = 0
     best_episode_return = 0
@@ -79,7 +79,8 @@ def train_off_policy_agent_experiment(env, agent, batch_size, minimal_size, tota
             state = next_state
 
             if agent.replay_buffer.memory_num > minimal_size:
-                agent.train(batch_size)
+                for _ in range(update_times):
+                    agent.train(batch_size)
 
             # Evaluate every 1% total timesteps, each evaluation reports the average reward over num_evaluate with no exploration noise.
             # The results are reported over 10 random seeds of the Gym simulator and the network initialization.

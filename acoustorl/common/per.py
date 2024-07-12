@@ -87,16 +87,16 @@ class ReplayBuffer(object):  # stored as ( s, a, r, s_ ) in SumTree
     abs_err_upper = 1.  # clipped abs error
 
     def __init__(self, 
-                 obs_dim, 
-                 act_dim,
-                 size=int(1e6),
+                 state_dim, 
+                 action_dim,
+                 max_size=int(1e6),
                  device=None,
                  ):
         self.device = device
-        self.tree = SumTree(size)
+        self.tree = SumTree(max_size)
         self.full_flag = False
         self.memory_num = 0
-        self.memory_size = size
+        self.memory_size = max_size
 
     def store(self, state, action, reward, next_state, terminated):
         transition = (state, action, reward, next_state, terminated)

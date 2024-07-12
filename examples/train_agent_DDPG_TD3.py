@@ -35,8 +35,8 @@ def algorithm_instantiation(args, kwargs):
 # After each evaluation, calculate the average reward obtained by the model and save it.
 if __name__ == "__main__":
     parser = ArgumentParser(description='ArgumentParser for AcoustoRL')
-    parser.add_argument(        "--algorithm", default="TD3", type=str, help='Algorithm name')
-    parser.add_argument(              "--env", default="HalfCheetah-v2", type=str, help='Environment name')       
+    parser.add_argument(        "--algorithm", default="TD3_per", type=str, help='Algorithm name')
+    parser.add_argument(              "--env", default="Hopper-v3", type=str, help='Environment name')       
     parser.add_argument(       "--hidden_dim", default=256, type=int, help='The number of neurons in the hidden layer')     
     parser.add_argument("--exploration_noise", default=0.1, type=float, help='Exploration noise when select action')             
     parser.add_argument(         "--discount", default=0.99, type=float, help='Discount factor')    
@@ -48,9 +48,9 @@ if __name__ == "__main__":
     parser.add_argument(      "--policy_freq", default=1, type=int, help='Frequency of delayed policy updates')      
     parser.add_argument(     "--update_times", default=1, type=int, help='The number of gradient descent steps performed per update')      
     parser.add_argument("--if_use_huber_loss", default=False, type=bool, help='If use Huber loss')      
-    parser.add_argument(  "--total_timesteps", default=1e6, type=int, help='Max time steps to run environment')   
-    parser.add_argument(      "--buffer_size", default=1e6, type=int, help='Buffer size')       
-    parser.add_argument(     "--minimal_size", default=25e3, type=int, help='Time steps initial random policy is used')
+    parser.add_argument(  "--total_timesteps", default=int(1e6), type=int, help='Max time steps to run environment')   
+    parser.add_argument(      "--buffer_size", default=int(1e6), type=int, help='Buffer size')       
+    parser.add_argument(     "--minimal_size", default=int(25e3), type=int, help='Time steps initial random policy is used')
     parser.add_argument(       "--batch_size", default=256, type=int, help='Batch size for both actor and critic')     
     args = parser.parse_args()
 
@@ -96,7 +96,7 @@ if __name__ == "__main__":
         agent = algorithm_instantiation(args, kwargs)
 
         if args.algorithm == "TD3_per":
-            replay_buffer = per(
+            replay_buffer = per.ReplayBuffer(
                 state_dim = state_dim,
                 action_dim = action_dim,
                 max_size = args.buffer_size,

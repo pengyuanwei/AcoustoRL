@@ -1,50 +1,96 @@
+import copy
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 
-class TwoLayerFC(torch.nn.Module):
-    def __init__(self, num_in, num_out, hidden_dim):
-        super().__init__()
-        self.fc1 = torch.nn.Linear(num_in, hidden_dim)
-        self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = torch.nn.Linear(hidden_dim, num_out)
+# Reference: https://github.com/boyu-ai/Hands-on-RL/tree/main
 
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        return self.fc3(x)
 
+class Actor(nn.Module):
+	def __init__(self, state_dim, hidden_dim, action_dim, max_action):
+		super(Actor, self).__init__()
+
+		self.l1 = nn.Linear(state_dim, hidden_dim)
+		self.l2 = nn.Linear(hidden_dim, hidden_dim)
+		self.l3 = nn.Linear(hidden_dim, action_dim)
+		
+		self.max_action = max_action
+		
+
+	def forward(self, state):
+		a = F.relu(self.l1(state))
+		a = F.relu(self.l2(a))
+		return self.max_action * torch.tanh(self.l3(a))
+
+
+class Critic(nn.Module):
+	def __init__(self, critic_input_dim, hidden_dim, max_action):
+		super(Critic, self).__init__()
+
+		self.l1 = nn.Linear(critic_input_dim, hidden_dim)
+		self.l2 = nn.Linear(hidden_dim, hidden_dim)
+		self.l3 = nn.Linear(hidden_dim, 1)
+		
+		self.max_action = max_action
+
+
+	def forward(self, state, action):
+        # action can be a tensor or a list of tensors
+		action = [a / self.max_action for a in action]
+		state = torch.cat(state, dim=1)
+		action = torch.cat(action, dim=1)
+		sa = torch.cat([state, action], dim=1)
+
+		q = F.relu(self.l1(sa))
+		q = F.relu(self.l2(q))
+		q = self.l3(q)
+		return q
+     
 
 class DDPG:
-    ''' DDPG算法 '''
-    def __init__(self, state_dim, action_dim, critic_input_dim, hidden_dim,
-                 actor_lr, critic_lr, device):
-        self.actor = TwoLayerFC(state_dim, action_dim, hidden_dim).to(device)
-        self.target_actor = TwoLayerFC(state_dim, action_dim,
-                                       hidden_dim).to(device)
-        self.critic = TwoLayerFC(critic_input_dim, 1, hidden_dim).to(device)
-        self.target_critic = TwoLayerFC(critic_input_dim, 1,
-                                        hidden_dim).to(device)
-        self.target_critic.load_state_dict(self.critic.state_dict())
-        self.target_actor.load_state_dict(self.actor.state_dict())
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
-                                                lr=actor_lr)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
-                                                 lr=critic_lr)
+    def __init__(
+        self, 
+        state_dim, 
+        action_dim, 
+        min_action,
+		max_action, 
+        critic_input_dim,
+        hidden_dim=256,
+		exploration_noise=0.1,	#sigma
+        actor_lr=3e-4, 
+        critic_lr=3e-4, 
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ):
+        self.device = device
+        self.max_action = torch.tensor(max_action).to(device)
+        self.min_action = torch.tensor(min_action).to(device)
 
-    def take_action(self, state, explore=False):
+        self.actor = Actor(state_dim, hidden_dim, action_dim, max_action).to(device)
+        self.target_actor = copy.deepcopy(self.actor)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
+
+        self.critic = Critic(critic_input_dim, hidden_dim, max_action).to(device)
+        self.target_critic = copy.deepcopy(self.critic)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr)
+
+        self.exploration_noise = exploration_noise * (self.max_action - self.min_action) / 2.0
+
+
+    def take_action(self, state, explore=True):
+        state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         action = self.actor(state)
         if explore:
-            action = gumbel_softmax(action)
-        else:
-            action = onehot_from_logits(action)
-        return action.detach().cpu().numpy()[0]
+            noise = torch.randn_like(action) * self.exploration_noise
+            action = (action + noise).clamp(self.min_action, self.max_action)
+        action = action.cpu().data.numpy().flatten()
+        return action
+
 
     def soft_update(self, net, target_net, tau):
-        for param_target, param in zip(target_net.parameters(),
-                                       net.parameters()):
-            param_target.data.copy_(param_target.data * (1.0 - tau) +
-                                    param.data * tau)
+        for param, target_param in zip(net.parameters(), target_net.parameters()):
+            target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+
 
 class MADDPG:
     def __init__(self, env, device, actor_lr, critic_lr, hidden_dim,
@@ -59,13 +105,16 @@ class MADDPG:
         self.critic_criterion = torch.nn.MSELoss()
         self.device = device
 
+
     @property
     def policies(self):
         return [agt.actor for agt in self.agents]
 
+
     @property
     def target_policies(self):
         return [agt.target_actor for agt in self.agents]
+
 
     def take_action(self, states, explore):
         states = [

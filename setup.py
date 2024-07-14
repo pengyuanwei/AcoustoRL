@@ -9,7 +9,7 @@ setup(
     description="A RL implementation Python library",
     long_description=open('README.md').read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/AcoustoRL",
+    url="https://github.com/pengyuanwei/AcoustoRL",
     packages=find_packages(),
     install_requires=[],    
     classifiers=[

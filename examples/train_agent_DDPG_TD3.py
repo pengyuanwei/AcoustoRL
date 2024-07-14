@@ -11,25 +11,6 @@ from acoustorl.common import per
 from acoustorl.common.general_utils import *
 
 
-def algorithm_instantiation(args, kwargs):
-    # Initialize agent
-    if args.algorithm == "TD3":
-        kwargs["policy_noise"] = args.policy_noise
-        kwargs["noise_clip"] = args.noise_clip
-        kwargs["policy_freq"] = args.policy_freq
-        agent = TD3(**kwargs)
-    elif args.algorithm == "TD3_per":
-        kwargs["policy_noise"] = args.policy_noise
-        kwargs["noise_clip"] = args.noise_clip
-        kwargs["policy_freq"] = args.policy_freq
-        kwargs["if_use_huber_loss"] = args.if_use_huber_loss
-        agent = TD3_per(**kwargs)
-    elif args.policy == "DDPG":
-        agent = DDPG(**kwargs)
-
-    return agent 
-
-
 # Train models separately using 5 different random seeds.
 # During each training, every time evaluation uses 5 random seeds different from the training random seed.
 # After each evaluation, calculate the average reward obtained by the model and save it.
@@ -95,14 +76,13 @@ if __name__ == "__main__":
 
         agent = algorithm_instantiation(args, kwargs)
 
-        if args.algorithm == "TD3_per":
+        if args.algorithm == "TD3_per" or args.algorithm == "DDPG_per":
             replay_buffer = per.ReplayBuffer(
                 state_dim = state_dim,
                 action_dim = action_dim,
                 max_size = args.buffer_size,
                 device = device
             )
-            replay_buffer.beta_increment_per_sampling = 1/args.total_timesteps
         else:
             replay_buffer = ReplayBuffer(
                 state_dim = state_dim,

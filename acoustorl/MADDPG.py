@@ -93,10 +93,23 @@ class DDPG:
 
 
 class MADDPG:
-    def __init__(self, env, device, actor_lr, critic_lr, hidden_dim,
-                 state_dims, action_dims, critic_input_dim, gamma, tau):
+    def __init__(
+        self, 
+        num_agents, 
+        state_dims, 
+        action_dims, 
+        hidden_dim,
+        critic_input_dim, 
+        gamma, 
+        tau,
+        actor_lr, 
+        critic_lr, 
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ):
+        self.device = device
+        self.num_agents = num_agents
         self.agents = []
-        for i in range(len(env.agents)):
+        for i in range(self.num_agents):
             self.agents.append(
                 DDPG(state_dims[i], action_dims[i], critic_input_dim,
                      hidden_dim, actor_lr, critic_lr, device))
@@ -119,12 +132,13 @@ class MADDPG:
     def take_action(self, states, explore):
         states = [
             torch.tensor([states[i]], dtype=torch.float, device=self.device)
-            for i in range(len(env.agents))
+            for i in range(self.num_agents)
         ]
         return [
             agent.take_action(state, explore)
             for agent, state in zip(self.agents, states)
         ]
+
 
     def update(self, sample, i_agent):
         obs, act, rew, next_obs, done = sample
@@ -132,34 +146,32 @@ class MADDPG:
 
         cur_agent.critic_optimizer.zero_grad()
         all_target_act = [
-            onehot_from_logits(pi(_next_obs))
+            pi(_next_obs) 
             for pi, _next_obs in zip(self.target_policies, next_obs)
         ]
         target_critic_input = torch.cat((*next_obs, *all_target_act), dim=1)
-        target_critic_value = rew[i_agent].view(
-            -1, 1) + self.gamma * cur_agent.target_critic(
-                target_critic_input) * (1 - done[i_agent].view(-1, 1))
+        target_critic_value = rew[i_agent].view(-1, 1) + self.gamma * cur_agent.target_critic(target_critic_input) * (1 - done[i_agent].view(-1, 1))
         critic_input = torch.cat((*obs, *act), dim=1)
         critic_value = cur_agent.critic(critic_input)
-        critic_loss = self.critic_criterion(critic_value,
-                                            target_critic_value.detach())
+        critic_loss = self.critic_criterion(critic_value, target_critic_value.detach())
         critic_loss.backward()
         cur_agent.critic_optimizer.step()
 
         cur_agent.actor_optimizer.zero_grad()
         cur_actor_out = cur_agent.actor(obs[i_agent])
-        cur_act_vf_in = gumbel_softmax(cur_actor_out)
+        cur_act_vf_in = cur_actor_out
         all_actor_acs = []
         for i, (pi, _obs) in enumerate(zip(self.policies, obs)):
             if i == i_agent:
                 all_actor_acs.append(cur_act_vf_in)
             else:
-                all_actor_acs.append(onehot_from_logits(pi(_obs)))
+                all_actor_acs.append(pi(_obs))
         vf_in = torch.cat((*obs, *all_actor_acs), dim=1)
         actor_loss = -cur_agent.critic(vf_in).mean()
         actor_loss += (cur_actor_out**2).mean() * 1e-3
         actor_loss.backward()
         cur_agent.actor_optimizer.step()
+
 
     def update_all_targets(self):
         for agt in self.agents:

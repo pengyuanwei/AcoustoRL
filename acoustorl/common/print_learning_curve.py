@@ -13,8 +13,8 @@ import os
 # the mean of the five average rewards at each timestep, and the shaded contour line consists of the quartiles of the mean.
 if __name__ == "__main__":
     num_experiment = 5
-    env_name = 'HalfCheetah-v2'  #'HalfCheetah-v2', 'Hopper-v3', 'Walker2d-v4'
-    algorithm = ['TD3', 'TD3_multi_update_times', 'TD3_multi_update_times_v1']
+    env_name = 'Walker2d-v4'  #'HalfCheetah-v2', 'Hopper-v3', 'Walker2d-v4'
+    algorithm = ['TD3', 'TD3_per_v0', 'TD3_per']
 
 
     ####################################################################################################

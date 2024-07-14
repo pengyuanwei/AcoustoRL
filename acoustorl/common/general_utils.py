@@ -3,6 +3,8 @@ import numpy as np
 from tqdm import tqdm
 import gymnasium as gym
 
+from acoustorl import *
+
 
 def train_off_policy_agent(env, agent, replay_buffer, batch_size, minimal_size, total_timesteps, update_times, env_name, target_folder, seed):
     num_evaluate = 5
@@ -122,6 +124,28 @@ class ReplayBuffer(object):
             torch.FloatTensor(self.done[ind]).to(self.device)
         )
     
+
+def algorithm_instantiation(args, kwargs):
+    # Initialize agent
+    if args.algorithm == "TD3":
+        kwargs["policy_noise"] = args.policy_noise
+        kwargs["noise_clip"] = args.noise_clip
+        kwargs["policy_freq"] = args.policy_freq
+        agent = TD3(**kwargs)
+    elif args.algorithm == "TD3_per":
+        kwargs["policy_noise"] = args.policy_noise
+        kwargs["noise_clip"] = args.noise_clip
+        kwargs["policy_freq"] = args.policy_freq
+        kwargs["if_use_huber_loss"] = args.if_use_huber_loss
+        agent = TD3_per(**kwargs)
+    elif args.policy == "DDPG":
+        agent = DDPG(**kwargs)
+    elif args.policy == "DDPG_per":
+        kwargs["if_use_huber_loss"] = args.if_use_huber_loss
+        agent = DDPG_per(**kwargs)
+
+    return agent 
+
 
 def moving_average(a, window_size):
     cumulative_sum = np.cumsum(np.insert(a, 0, 0)) 

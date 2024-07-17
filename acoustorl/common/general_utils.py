@@ -84,22 +84,53 @@ def eval_policy(agent, env_name, eval_episodes=10):
     return average_reward, reward_std
 
 
-class ReplayBuffer(object):
-    def __init__(self, 
-                 state_dim, 
-                 action_dim, 
-                 max_size=int(1e6),
-                 device=None,
-                 ):
+class ReplayBuffer():
+    def __init__(self, state_dim, action_dim, max_size=int(1e6), device=None):
         self.max_size = max_size
         self.ptr = 0
         self.memory_num = 0
 
-        self.state = np.zeros((max_size, state_dim))
-        self.action = np.zeros((max_size, action_dim))
-        self.next_state = np.zeros((max_size, state_dim))
-        self.reward = np.zeros((max_size, 1))
-        self.done = np.zeros((max_size, 1))
+        self.state = np.zeros((max_size, state_dim), dtype=np.float32)
+        self.action = np.zeros((max_size, action_dim), dtype=np.float32)
+        self.next_state = np.zeros((max_size, state_dim), dtype=np.float32)
+        self.reward = np.zeros((max_size, 1), dtype=np.float32)
+        self.done = np.zeros((max_size, 1), dtype=np.float32)
+
+        self.device = device
+
+    def store(self, state, action, reward, next_state, terminated):
+        self.state[self.ptr] = state
+        self.action[self.ptr] = action
+        self.reward[self.ptr] = reward
+        self.next_state[self.ptr] = next_state
+        self.done[self.ptr] = terminated
+
+        self.ptr = (self.ptr + 1) % self.max_size
+        self.memory_num = min(self.memory_num + 1, self.max_size)    
+
+    def sample_batch(self, batch_size):
+        ind = np.random.randint(0, self.memory_num, size=batch_size)
+
+        return (
+            torch.FloatTensor(self.state[ind]).to(self.device),
+            torch.FloatTensor(self.action[ind]).to(self.device),
+            torch.FloatTensor(self.reward[ind]).to(self.device),
+            torch.FloatTensor(self.next_state[ind]).to(self.device),
+            torch.FloatTensor(self.done[ind]).to(self.device)
+        )
+    
+
+class ReplayBuffer_MADDPG():
+    def __init__(self, num_agents, state_dim, action_dim, max_size=int(1e6), device=None):
+        self.max_size = max_size
+        self.ptr = 0
+        self.memory_num = 0
+
+        self.state = np.zeros((max_size, num_agents, state_dim), dtype=np.float32)
+        self.action = np.zeros((max_size, num_agents, action_dim), dtype=np.float32)
+        self.next_state = np.zeros((max_size, num_agents, state_dim), dtype=np.float32)
+        self.reward = np.zeros((max_size, num_agents), dtype=np.float32)
+        self.done = np.zeros((max_size, 1), dtype=np.float32)
 
         self.device = device
 

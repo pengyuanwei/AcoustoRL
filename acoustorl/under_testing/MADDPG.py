@@ -24,6 +24,12 @@ class Actor(nn.Module):
 		return self.max_action * torch.tanh(self.l3(a))
 
 
+	def reinitialize(self):
+		self.l1.reset_parameters()
+		self.l2.reset_parameters()
+		self.l3.reset_parameters()
+
+
 class Critic(nn.Module):
 	def __init__(self, critic_input_dim, hidden_dim):
 		super(Critic, self).__init__()
@@ -39,6 +45,12 @@ class Critic(nn.Module):
 		q = self.l3(q)
 		return q
      
+
+	def reinitialize(self):
+		self.l1.reset_parameters()
+		self.l2.reset_parameters()
+		self.l3.reset_parameters()
+
 
 class DDPG:
     def __init__(
@@ -57,6 +69,8 @@ class DDPG:
         self.device = device
         self.max_action = torch.tensor(max_action).to(device)
         self.min_action = torch.tensor(min_action).to(device)
+        self.actor_lr = actor_lr
+        self.critic_lr = critic_lr
 
         self.actor = Actor(state_dim, hidden_dim, action_dim, max_action).to(device)
         self.target_actor = copy.deepcopy(self.actor)
@@ -68,6 +82,16 @@ class DDPG:
 
         self.exploration_noise = exploration_noise * (self.max_action - self.min_action) / 2.0
 
+
+    def reinitialize(self):
+        self.actor.reinitialize()
+        self.actor_target = copy.deepcopy(self.actor)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.actor_lr)
+
+        self.critic.reinitialize()
+        self.critic_target = copy.deepcopy(self.critic)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr)
+          
 
     def take_action(self, state, explore=True):
         state = state.reshape(1, -1).clone().detach().to(self.device).float()
@@ -85,20 +109,20 @@ class DDPG:
 
 
     def save(self, i_agent, filename, save_dir):
-        torch.save(self.critic.state_dict(), save_dir + "/critic%d%d.pth"%(i_agent, filename))
-        torch.save(self.critic_optimizer.state_dict(), save_dir + "/critic_optimizer%d%d.pth"%(i_agent, filename))
+        torch.save(self.critic.state_dict(), save_dir + "/critic%d_%d.pth"%(filename, i_agent))
+        torch.save(self.critic_optimizer.state_dict(), save_dir + "/critic_optimizer%d_%d.pth"%(filename, i_agent))
         
-        torch.save(self.actor.state_dict(), save_dir + "/actor%d%d.pth"%(i_agent, filename))
-        torch.save(self.actor_optimizer.state_dict(), save_dir + "/actor_optimizer%d%d.pth"%(i_agent, filename))
+        torch.save(self.actor.state_dict(), save_dir + "/actor%d_%d.pth"%(filename, i_agent))
+        torch.save(self.actor_optimizer.state_dict(), save_dir + "/actor_optimizer%d_%d.pth"%(filename, i_agent))
 
 
     def load(self, i_agent, filename, save_dir):
-        self.critic.load_state_dict(torch.load(save_dir + "/critic%d%d.pth"%(i_agent, filename)))
-        self.critic_optimizer.load_state_dict(torch.load(save_dir + "/critic_optimizer%d%d.pth"%(i_agent, filename)))
+        self.critic.load_state_dict(torch.load(save_dir + "/critic%d_%d.pth"%(filename, i_agent)))
+        self.critic_optimizer.load_state_dict(torch.load(save_dir + "/critic_optimizer%d_%d.pth"%(filename, i_agent)))
         self.critic_target = copy.deepcopy(self.critic)
 
-        self.actor.load_state_dict(torch.load(save_dir + "/actor%d%d.pth"%(i_agent, filename)))
-        self.actor_optimizer.load_state_dict(torch.load(save_dir + "/actor_optimizer%d%d.pth"%(i_agent, filename)))
+        self.actor.load_state_dict(torch.load(save_dir + "/actor%d_%d.pth"%(filename, i_agent)))
+        self.actor_optimizer.load_state_dict(torch.load(save_dir + "/actor_optimizer%d_%d.pth"%(filename, i_agent)))
         self.actor_target = copy.deepcopy(self.actor)
 
 
@@ -112,11 +136,11 @@ class MADDPG:
 		max_action, 
         critic_input_dim, 
         hidden_dim,
-		exploration_noise,
-        gamma, 
-        tau,
-        actor_lr, 
-        critic_lr, 
+		exploration_noise=0.3,
+        gamma=0.98, 
+        tau=0.005,
+        actor_lr=2e-4, 
+        critic_lr=4e-4, 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ):
         self.device = device
@@ -204,12 +228,25 @@ class MADDPG:
         actor_loss.backward()
         cur_agent.actor_optimizer.step()
 
+        #self.update_all_targets()
+
 
     def update_all_targets(self):
         for agt in self.agents:
             agt.soft_update(agt.actor, agt.target_actor, self.tau)
             agt.soft_update(agt.critic, agt.target_critic, self.tau)
 
+
+    def reinitialize(self):
+        for agt in self.agents:
+            agt.reinitialize()
+
+
     def save(self, filename, save_dir):
         for i, agt in enumerate(self.agents):
             agt.save(i, filename, save_dir)
+
+
+    def load(self, filename, save_dir):
+        for i, agt in enumerate(self.agents):
+            agt.load(i, filename, save_dir)

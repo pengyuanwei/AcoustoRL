@@ -3,9 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-# Reference: https://github.com/boyu-ai/Hands-on-RL/tree/main
-
+'''
+Reference: https://github.com/boyu-ai/Hands-on-RL/tree/main
+'''
 
 class Actor(nn.Module):
 	def __init__(self, state_dim, hidden_dim, action_dim, max_action):
@@ -16,13 +16,11 @@ class Actor(nn.Module):
 		self.l3 = nn.Linear(hidden_dim, action_dim)
 		
 		self.max_action = max_action
-		
 
 	def forward(self, state):
 		a = F.relu(self.l1(state))
 		a = F.relu(self.l2(a))
 		return self.max_action * torch.tanh(self.l3(a))
-
 
 	def reinitialize(self):
 		self.l1.reset_parameters()
@@ -38,13 +36,11 @@ class Critic(nn.Module):
 		self.l2 = nn.Linear(hidden_dim, hidden_dim)
 		self.l3 = nn.Linear(hidden_dim, 1)
 		
-
 	def forward(self, critic_input):
 		q = F.relu(self.l1(critic_input))
 		q = F.relu(self.l2(q))
 		q = self.l3(q)
 		return q
-     
 
 	def reinitialize(self):
 		self.l1.reset_parameters()
@@ -82,7 +78,6 @@ class DDPG:
 
         self.exploration_noise = exploration_noise * (self.max_action - self.min_action) / 2.0
 
-
     def reinitialize(self):
         self.actor.reinitialize()
         self.target_actor = copy.deepcopy(self.actor)
@@ -91,7 +86,6 @@ class DDPG:
         self.critic.reinitialize()
         self.target_critic = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr)
-
 
     def take_action(self, state, explore=True):
         state = state.reshape(1, -1).clone().detach().to(self.device).float()
@@ -102,11 +96,9 @@ class DDPG:
         action = action.cpu().data.numpy().flatten()
         return action
 
-
     def soft_update(self, net, target_net, tau):
         for param, target_param in zip(net.parameters(), target_net.parameters()):
             target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
-
 
     def save(self, i_agent, filename, save_dir):
         torch.save(self.critic.state_dict(), save_dir + "/critic%d_%d.pth"%(filename, i_agent))
@@ -114,7 +106,6 @@ class DDPG:
         
         torch.save(self.actor.state_dict(), save_dir + "/actor%d_%d.pth"%(filename, i_agent))
         torch.save(self.actor_optimizer.state_dict(), save_dir + "/actor_optimizer%d_%d.pth"%(filename, i_agent))
-
 
     def load(self, i_agent, filename, save_dir):
         self.critic.load_state_dict(torch.load(save_dir + "/critic%d_%d.pth"%(filename, i_agent)))
@@ -147,7 +138,7 @@ class MADDPG:
         self.num_agents = num_agents
         self.agents = []
 
-        for i in range(self.num_agents):
+        for _ in range(self.num_agents):
             self.agents.append(
                 DDPG(
                     state_dims, 
@@ -168,16 +159,13 @@ class MADDPG:
         # Instantiation the MSE loss class
         self.criterion = nn.MSELoss(reduction="mean")
 
-
     @property
     def policies(self):
         return [agt.actor for agt in self.agents]
 
-
     @property
     def target_policies(self):
         return [agt.target_actor for agt in self.agents]
-
 
     def take_action(self, states, explore=True):
         states = torch.tensor(states, dtype=torch.float, device=self.device)
@@ -185,7 +173,6 @@ class MADDPG:
             agent.take_action(state, explore)
             for agent, state in zip(self.agents, states)
         ]
-
 
     def train(self, replay_buffer, batch_size, i_agent):
 		# Sample replay buffer 
@@ -230,22 +217,18 @@ class MADDPG:
 
         #self.update_all_targets()
 
-
     def update_all_targets(self):
         for agt in self.agents:
             agt.soft_update(agt.actor, agt.target_actor, self.tau)
             agt.soft_update(agt.critic, agt.target_critic, self.tau)
 
-
     def reinitialize(self):
         for agt in self.agents:
             agt.reinitialize()
 
-
     def save(self, filename, save_dir):
         for i, agt in enumerate(self.agents):
             agt.save(i, filename, save_dir)
-
 
     def load(self, filename, save_dir):
         for i, agt in enumerate(self.agents):
